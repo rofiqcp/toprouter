@@ -1,0 +1,234 @@
+import { v4 as uuidv4 } from "uuid";
+import { getAdapter } from "../driver.js";
+import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
+
+const OPTIONAL_FIELDS = [
+  "displayName", "email", "globalPriority", "defaultModel",
+  "accessToken", "refreshToken", "expiresAt", "tokenType",
+  "scope", "projectId", "apiKey", "testStatus",
+  "lastTested", "lastError", "lastErrorAt", "rateLimitedUntil", "expiresIn", "errorCode",
+  "consecutiveUseCount",
+];
+
+function rowToConn(row) {
+  if (!row) return null;
+  // PG returns lowercase column names; normalize for both adapters
+  const r = {
+    ...row,
+    isActive: row.isActive ?? row.isactive,
+    authType: row.authType ?? row.authtype,
+    createdAt: row.createdAt ?? row.createdat,
+    updatedAt: row.updatedAt ?? row.updatedat,
+  };
+  const extra = parseJson(r.data, {});
+  return {
+    ...extra,
+    id: r.id,
+    provider: r.provider,
+    authType: r.authType,
+    name: r.name,
+    email: r.email,
+    priority: r.priority,
+    isActive: r.isActive === 1 || r.isActive === true,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+}
+
+function connToRow(c) {
+  const { id, provider, authType, name, email, priority, isActive, createdAt, updatedAt, ...rest } = c;
+  return {
+    id,
+    provider,
+    authType,
+    name: name ?? null,
+    email: email ?? null,
+    priority: priority ?? null,
+    isActive: isActive === false ? 0 : 1,
+    data: stringifyJson(rest),
+    createdAt,
+    updatedAt,
+  };
+}
+
+async function upsert(db, c) {
+  const r = connToRow(c);
+  await db.run(
+    `INSERT INTO providerConnections(id, provider, authType, name, email, priority, isActive, data, createdAt, updatedAt)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       provider=excluded.provider, authType=excluded.authType, name=excluded.name,
+       email=excluded.email, priority=excluded.priority, isActive=excluded.isActive,
+       data=excluded.data, updatedAt=excluded.updatedAt`,
+    [r.id, r.provider, r.authType, r.name, r.email, r.priority, r.isActive, r.data, r.createdAt, r.updatedAt]
+  );
+}
+
+export async function getProviderConnections(filter = {}) {
+  const db = await getAdapter();
+  const where = [];
+  const params = [];
+  if (filter.provider) { where.push("provider = ?"); params.push(filter.provider); }
+  if (filter.isActive !== undefined) { where.push("isActive = ?"); params.push(filter.isActive ? 1 : 0); }
+  const sql = `SELECT * FROM providerConnections${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
+  const rows = await db.all(sql, params);
+  const list = rows.map(rowToConn);
+  list.sort((a, b) => (a.priority || 999) - (b.priority || 999));
+  return list;
+}
+
+export async function getProviderConnectionById(id) {
+  const db = await getAdapter();
+  const row = await db.get(`SELECT * FROM providerConnections WHERE id = ?`, [id]);
+  return rowToConn(row);
+}
+
+// Internal sync reorder — must be called INSIDE a transaction
+async function reorderInTx(db, providerId) {
+  const rows = await db.all(`SELECT * FROM providerConnections WHERE provider = ?`, [providerId]);
+  const list = rows.map(rowToConn);
+  list.sort((a, b) => {
+    const pDiff = (a.priority || 0) - (b.priority || 0);
+    if (pDiff !== 0) return pDiff;
+    return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
+  });
+  for (let i = 0; i < list.length; i++) {
+    await db.run(`UPDATE providerConnections SET priority = ? WHERE id = ?`, [i + 1, list[i].id]);
+  }
+}
+
+export async function createProviderConnection(data) {
+  const db = await getAdapter();
+  const now = new Date().toISOString();
+  let result;
+
+  await db.transaction(async (tx) => {
+    const allRows = await tx.all(`SELECT * FROM providerConnections WHERE provider = ?`, [data.provider]);
+    const all = allRows.map(rowToConn);
+
+    let existing = null;
+    if (data.authType === "oauth" && data.email) {
+      const incomingWs = data.providerSpecificData?.chatgptAccountId;
+      existing = all.find(c => {
+        if (c.authType !== "oauth" || c.email !== data.email) return false;
+        const existingWs = c.providerSpecificData?.chatgptAccountId;
+        if (incomingWs && existingWs) return incomingWs === existingWs;
+        return true;
+      });
+    } else if (data.authType === "apikey" && data.name) {
+      existing = all.find(c => c.authType === "apikey" && c.name === data.name);
+    }
+
+    if (existing) {
+      const merged = { ...existing, ...data, updatedAt: now };
+      await upsert(tx, merged);
+      result = merged;
+      return;
+    }
+
+    let connectionName = data.name || null;
+    if (!connectionName && (data.authType === "oauth" || data.authType === "access_token")) {
+      connectionName = data.email || `Account ${all.length + 1}`;
+    }
+    let connectionPriority = data.priority;
+    if (!connectionPriority) {
+      connectionPriority = all.reduce((m, c) => Math.max(m, c.priority || 0), 0) + 1;
+    }
+
+    const conn = {
+      id: uuidv4(),
+      provider: data.provider,
+      authType: data.authType || "oauth",
+      name: connectionName,
+      priority: connectionPriority,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    for (const f of OPTIONAL_FIELDS) {
+      if (data[f] !== undefined && data[f] !== null) conn[f] = data[f];
+    }
+    if (data.providerSpecificData && Object.keys(data.providerSpecificData).length > 0) {
+      conn.providerSpecificData = data.providerSpecificData;
+    }
+    if (data.email !== undefined) conn.email = data.email;
+
+    await upsert(tx, conn);
+    await reorderInTx(tx, data.provider);
+    result = conn;
+  });
+
+  return result;
+}
+
+// Critical: OAuth refresh token race — atomic merge inside transaction
+export async function updateProviderConnection(id, data) {
+  const db = await getAdapter();
+  let result;
+  await db.transaction(async (tx) => {
+    const row = await tx.get(`SELECT * FROM providerConnections WHERE id = ?`, [id]);
+    if (!row) { result = null; return; }
+    const existing = rowToConn(row);
+    const merged = { ...existing, ...data, updatedAt: new Date().toISOString() };
+    await upsert(tx, merged);
+    if (data.priority !== undefined) await reorderInTx(tx, existing.provider);
+    result = merged;
+  });
+  return result;
+}
+
+export async function deleteProviderConnection(id) {
+  const db = await getAdapter();
+  let ok = false;
+  await db.transaction(async (tx) => {
+    const row = await tx.get(`SELECT provider FROM providerConnections WHERE id = ?`, [id]);
+    if (!row) return;
+    await tx.run(`DELETE FROM providerConnections WHERE id = ?`, [id]);
+    await reorderInTx(tx, row.provider);
+    ok = true;
+  });
+  return ok;
+}
+
+export async function deleteProviderConnectionsByProvider(providerId) {
+  const db = await getAdapter();
+  const before = await db.get(`SELECT COUNT(*) AS n FROM providerConnections WHERE provider = ?`, [providerId]);
+  await db.run(`DELETE FROM providerConnections WHERE provider = ?`, [providerId]);
+  return before?.n || 0;
+}
+
+export async function reorderProviderConnections(providerId) {
+  const db = await getAdapter();
+  await db.transaction(async (tx) => await reorderInTx(tx, providerId));
+}
+
+export async function cleanupProviderConnections() {
+  const db = await getAdapter();
+  const fieldsToCheck = [
+    "displayName", "email", "globalPriority", "defaultModel",
+    "accessToken", "refreshToken", "expiresAt", "tokenType",
+    "scope", "projectId", "apiKey", "testStatus",
+    "lastTested", "lastError", "lastErrorAt", "rateLimitedUntil", "expiresIn",
+    "consecutiveUseCount",
+  ];
+  let cleaned = 0;
+  await db.transaction(async (tx) => {
+    const rows = await tx.all(`SELECT * FROM providerConnections`);
+    for (const row of rows) {
+      const conn = rowToConn(row);
+      let dirty = false;
+      for (const f of fieldsToCheck) {
+        if (conn[f] === null || conn[f] === undefined) {
+          if (f in conn) { delete conn[f]; cleaned++; dirty = true; }
+        }
+      }
+      if (conn.providerSpecificData && Object.keys(conn.providerSpecificData).length === 0) {
+        delete conn.providerSpecificData;
+        cleaned++;
+        dirty = true;
+      }
+      if (dirty) await upsert(tx, conn);
+    }
+  });
+  return cleaned;
+}
