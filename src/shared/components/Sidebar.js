@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -10,14 +10,15 @@ import { MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import Button from "./Button";
 import { ConfirmModal } from "./Modal";
+import NineRemotePromoModal from "./NineRemotePromoModal";
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
-const VISIBLE_MEDIA_KINDS = ["embedding", "image", "tts", "stt"];
+const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageEdit", "tts", "stt", "video"];
 // Combined entry: webSearch + webFetch share one page at /dashboard/media-providers/web
 const COMBINED_WEB_ITEM = { id: "web", label: "Web Fetch & Search", icon: "travel_explore", href: "/dashboard/media-providers/web" };
 
 const navItems = [
-  { href: "/dashboard/endpoint", label: "Endpoint", icon: "api" },
+  { href: "/dashboard/endpoint", label: "Endpoint & Key", icon: "api" },
   { href: "/dashboard/providers", label: "Providers", icon: "dns" },
   // { href: "/dashboard/basic-chat", label: "Basic Chat", icon: "chat" }, // Hidden
   { href: "/dashboard/combos", label: "Combos", icon: "layers" },
@@ -40,8 +41,7 @@ const systemItems = [
 export default function Sidebar({ onClose }) {
   const pathname = usePathname();
   const [mediaOpen, setMediaOpen] = useState(false);
-  const [showShutdownModal, setShowShutdownModal] = useState(false);
-  const [isShuttingDown, setIsShuttingDown] = useState(false);
+  const [showRemoteModal, setShowRemoteModal] = useState(false);
   const [isDisconnected, setIsDisconnected] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -49,8 +49,16 @@ export default function Sidebar({ onClose }) {
   const [shutdownCountdown, setShutdownCountdown] = useState(0);
   const [enableTranslator, setEnableTranslator] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
+  const shutdownTimerRef = useRef(null);
 
   const INSTALL_CMD = UPDATER_CONFIG.installCmdLatest;
+
+  // Cleanup shutdown timer on unmount
+  useEffect(() => {
+    return () => {
+      if (shutdownTimerRef.current) clearInterval(shutdownTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -86,11 +94,13 @@ export default function Sidebar({ onClose }) {
     copy(INSTALL_CMD);
     let remaining = UPDATER_CONFIG.shutdownCountdownSec;
     setShutdownCountdown(remaining);
-    const timer = setInterval(() => {
+    if (shutdownTimerRef.current) clearInterval(shutdownTimerRef.current);
+    shutdownTimerRef.current = setInterval(() => {
       remaining -= 1;
       setShutdownCountdown(remaining);
       if (remaining <= 0) {
-        clearInterval(timer);
+        clearInterval(shutdownTimerRef.current);
+        shutdownTimerRef.current = null;
         fetch("/api/version/shutdown", { method: "POST" }).catch(() => {});
         setIsDisconnected(true);
       }
@@ -98,6 +108,10 @@ export default function Sidebar({ onClose }) {
   };
 
   const handleCancelUpdate = () => {
+    if (shutdownTimerRef.current) {
+      clearInterval(shutdownTimerRef.current);
+      shutdownTimerRef.current = null;
+    }
     setIsUpdating(false);
     setShutdownCountdown(0);
   };
@@ -105,18 +119,6 @@ export default function Sidebar({ onClose }) {
   // Note: legacy updater poll removed. New flow: copy install cmd + shutdown server,
   // user runs the command manually in another terminal.
 
-
-  const handleShutdown = async () => {
-    setIsShuttingDown(true);
-    try {
-      await fetch("/api/version/shutdown", { method: "POST" });
-    } catch (e) {
-      // Expected to fail as server shuts down; ignore error
-    }
-    setIsShuttingDown(false);
-    setShowShutdownModal(false);
-    setIsDisconnected(true);
-  };
 
   return (
     <>
@@ -302,6 +304,20 @@ export default function Sidebar({ onClose }) {
               ) : null;
             })}
 
+            {/* Remote */}
+            <button
+              onClick={() => setShowRemoteModal(true)}
+              className={cn(
+                "flex items-center gap-3 px-3 py-1 rounded-lg transition-all group w-full",
+                "text-text-muted hover:bg-surface-2 hover:text-text-main"
+              )}
+            >
+              <span className="material-symbols-outlined text-[18px] group-hover:text-primary transition-colors">
+                computer
+              </span>
+              <span className="text-[13px] font-medium">Remote</span>
+            </button>
+
             {/* Settings */}
             <Link
               href="/dashboard/profile"
@@ -326,40 +342,17 @@ export default function Sidebar({ onClose }) {
           </div>
         </nav>
 
-        {/* Footer section */}
-        <div className="p-3 border-t border-border-subtle">
-          {/* Shutdown button */}
-          <Button
-            variant="outline"
-            fullWidth
-            icon="power_settings_new"
-            onClick={() => setShowShutdownModal(true)}
-            className="text-red-500 border-red-200 hover:bg-red-50 hover:border-red-300"
-          >
-            Shutdown
-          </Button>
-        </div>
       </aside>
 
-      {/* Shutdown Confirmation Modal */}
-      <ConfirmModal
-        isOpen={showShutdownModal}
-        onClose={() => setShowShutdownModal(false)}
-        onConfirm={handleShutdown}
-        title="Close Proxy"
-        message="Are you sure you want to close the proxy server?"
-        confirmText="Close"
-        cancelText="Cancel"
-        variant="danger"
-        loading={isShuttingDown}
-      />
+      {/* Remote Promo Modal */}
+      <NineRemotePromoModal isOpen={showRemoteModal} onClose={() => setShowRemoteModal(false)} />
 
       {/* Update Confirmation Modal */}
       <ConfirmModal
         isOpen={showUpdateModal}
         onClose={() => setShowUpdateModal(false)}
         onConfirm={handleUpdate}
-        title="Update TopRouter"
+        title="Update 9Router"
         message={`Show install command for v${updateInfo?.latestVersion || ""}? You can copy it and shutdown to install manually.`}
         confirmText="Show Command"
         cancelText="Cancel"
@@ -410,7 +403,7 @@ function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdow
           <span className="material-symbols-outlined text-[24px]">content_copy</span>
         </div>
         <div>
-          <h2 className="text-lg font-semibold">Update TopRouter{latestVersion ? ` to v${latestVersion}` : ""}</h2>
+          <h2 className="text-lg font-semibold">Update 9Router{latestVersion ? ` to v${latestVersion}` : ""}</h2>
           <p className="text-xs text-white/60">
             {isDisconnected
               ? "Server stopped. Paste the command into a terminal to install."
@@ -429,7 +422,7 @@ function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdow
       <ol className="text-xs text-white/70 space-y-1 list-decimal list-inside mb-4">
         <li>Click <strong>Copy & Shutdown</strong> below.</li>
         <li>Paste the command into your terminal and press Enter.</li>
-        <li>Run <code className="px-1 rounded bg-white/10 text-green-400">toprouter</code> again after install.</li>
+        <li>Run <code className="px-1 rounded bg-white/10 text-green-400">9router</code> again after install.</li>
       </ol>
 
       {isDisconnected ? (

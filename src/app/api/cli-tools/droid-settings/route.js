@@ -37,17 +37,19 @@ const readSettings = async () => {
   try {
     const settingsPath = getDroidSettingsPath();
     const content = await fs.readFile(settingsPath, "utf-8");
-    return JSON.parse(content);
+    // Tolerate JSONC (trailing commas) and treat unparseable files as "no config"
+    // rather than throwing a 500 that the UI misreads as "tool not installed".
+    const stripped = content.replace(/,(\s*[}\]])/g, "$1");
+    return JSON.parse(stripped);
   } catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw error;
+    return null;
   }
 };
 
-// Check if settings has TopRouter customModels
-const hasTopRouterConfig = (settings) => {
+// Check if settings has 9Router customModels
+const has9RouterConfig = (settings) => {
   if (!settings || !settings.customModels) return false;
-  return settings.customModels.some(m => m.id?.startsWith("custom:TopRouter"));
+  return settings.customModels.some(m => m.id?.startsWith("custom:9Router"));
 };
 
 // GET - Check droid CLI and read current settings
@@ -68,7 +70,7 @@ export async function GET() {
     return NextResponse.json({
       installed: true,
       settings,
-      hasTopRouter: hasTopRouterConfig(settings),
+      has9Router: has9RouterConfig(settings),
       settingsPath: getDroidSettingsPath(),
     });
   } catch (error) {
@@ -77,7 +79,7 @@ export async function GET() {
   }
 }
 
-// POST - Update TopRouter customModels (merge with existing settings)
+// POST - Update 9Router customModels (merge with existing settings)
 // Accepts either `model` (string, legacy single-model) or `models` (array of strings, multi-model)
 // Also accepts `activeModel` to set which model is active/primary
 export async function POST(request) {
@@ -109,8 +111,8 @@ export async function POST(request) {
       settings.customModels = [];
     }
 
-    // Remove all existing TopRouter configs
-    settings.customModels = settings.customModels.filter(m => !m.id?.startsWith("custom:TopRouter"));
+    // Remove all existing 9Router configs
+    settings.customModels = settings.customModels.filter(m => !m.id?.startsWith("custom:9Router"));
 
     // Normalize baseUrl to ensure /v1 suffix
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
@@ -135,7 +137,7 @@ export async function POST(request) {
       if (!m || typeof m !== "string") continue;
       settings.customModels.push({
         model: m,
-        id: `custom:TopRouter-${i}`,
+        id: `custom:9Router-${i}`,
         index: i,
         baseUrl: normalizedBaseUrl,
         apiKey: keyToUse,
@@ -169,7 +171,7 @@ export async function POST(request) {
   }
 }
 
-// DELETE - Remove TopRouter customModels only (keep other settings)
+// DELETE - Remove 9Router customModels only (keep other settings)
 export async function DELETE() {
   try {
     const settingsPath = getDroidSettingsPath();
@@ -189,9 +191,9 @@ export async function DELETE() {
       throw error;
     }
 
-    // Remove TopRouter customModels
+    // Remove 9Router customModels
     if (settings.customModels) {
-      settings.customModels = settings.customModels.filter(m => !m.id?.startsWith("custom:TopRouter"));
+      settings.customModels = settings.customModels.filter(m => !m.id?.startsWith("custom:9Router"));
       
       // Remove customModels array if empty
       if (settings.customModels.length === 0) {
@@ -204,7 +206,7 @@ export async function DELETE() {
 
     return NextResponse.json({
       success: true,
-      message: "TopRouter settings removed successfully",
+      message: "9Router settings removed successfully",
     });
   } catch (error) {
     console.log("Error resetting droid settings:", error);

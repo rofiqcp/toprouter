@@ -12,7 +12,7 @@ export function makeKv(scope) {
       const db = await getAdapter();
       const rows = await db.all(`SELECT key, value FROM kv WHERE scope = ?`, [scope]);
       const out = {};
-      for (const r of rows) out[r.key] = parseJson(r.value);
+      for (const r of rows) { const v = parseJson(r.value); if (v != null) out[r.key] = v; }
       return out;
     },
     async set(key, value) {

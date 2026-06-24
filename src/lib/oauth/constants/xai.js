@@ -4,9 +4,10 @@
  * Source of truth: router-for-me/CLIProxyAPI internal/auth/xai/types.go
  * Mirrors the upstream Go constants 1:1.
  */
+import { PROVIDERS } from "open-sse/providers/index.js";
 
-// xAI client_id for OAuth (PKCE public client)
-export const XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828";
+// xAI client_id for OAuth (PKCE public client) — single source: registry xai.transport
+export const XAI_CLIENT_ID = PROVIDERS["xai"]?.clientId;
 
 // OAuth issuer + endpoints
 export const XAI_ISSUER = "https://auth.x.ai";
@@ -32,7 +33,7 @@ export const XAI_PKCE_VERIFIER_BYTES = 96;
 export const XAI_REFRESH_LEAD_SECONDS = 5 * 60;
 
 // User-Agent — mirror Go grok-cli UA. Version is best-effort; xAI does not pin a specific version.
-export const XAI_USER_AGENT = "grok-cli/toprouter";
+export const XAI_USER_AGENT = "grok-cli/9router";
 
 /**
  * Aggregated config object — mirrors the shape of CLAUDE_CONFIG/CODEX_CONFIG in oauth.js.

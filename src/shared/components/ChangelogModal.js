@@ -18,14 +18,16 @@ export default function ChangelogModal({ isOpen, onClose }) {
     if (!isOpen || html) return;
     setLoading(true);
     setError("");
-    fetch(GITHUB_CONFIG.changelogUrl)
+    const controller = new AbortController();
+    fetch(GITHUB_CONFIG.changelogUrl, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();
       })
       .then((md) => setHtml(marked.parse(md)))
-      .catch((err) => setError(err.message || "Failed to load"))
+      .catch((err) => { if (err.name !== "AbortError") { setError(err.message || "Failed to load"); console.warn("[ChangelogModal] Failed to load changelog:", err.message); } })
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, [isOpen, html]);
 
   useEffect(() => {

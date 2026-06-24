@@ -22,7 +22,6 @@ function colorLine(line) {
 export default function ConsoleLogClient() {
   const [logs, setLogs] = useState([]);
   const [connected, setConnected] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
   const logRef = useRef(null);
 
   const handleClear = async () => {
@@ -58,66 +57,30 @@ export default function ConsoleLogClient() {
     return () => es.close();
   }, []);
 
-  // Auto-scroll to bottom on new logs (only when enabled)
+  // Auto-scroll to bottom on new logs
   useEffect(() => {
-    if (!autoScroll || !logRef.current) return;
-    logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [logs, autoScroll]);
-
-  // Detect user scroll to disable auto-scroll
-  const handleScroll = () => {
     if (!logRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = logRef.current;
-    const atBottom = scrollHeight - scrollTop - clientHeight < 40;
-    setAutoScroll(atBottom);
-  };
+    logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logs]);
 
   return (
-    <div className="flex min-w-0 flex-col">
+    <div className="">
       <Card>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-3 sm:px-4 pt-3 pb-2">
-          {/* Connection status */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className={`relative flex h-2 w-2 shrink-0`}>
-              {connected && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              )}
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${connected ? "bg-green-500" : "bg-red-500"}`} />
-            </span>
-            <span className="text-text-muted">{connected ? "Live" : "Disconnected"}</span>
-            <span className="text-text-muted hidden sm:inline">·</span>
-            <span className="text-text-muted hidden sm:inline">{logs.length} lines</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant={autoScroll ? "primary" : "outline"}
-              onClick={() => {
-                setAutoScroll(!autoScroll);
-                if (!autoScroll && logRef.current) {
-                  logRef.current.scrollTop = logRef.current.scrollHeight;
-                }
-              }}
-            >
-              {autoScroll ? "Auto-scroll" : "Paused"}
-            </Button>
-            <Button size="sm" variant="outline" icon="delete" onClick={handleClear}>
-              Clear
-            </Button>
-          </div>
+        <div className="flex items-center justify-end px-4 pt-3 pb-2">
+          <Button size="sm" variant="outline" icon="delete" onClick={handleClear}>
+            Clear
+          </Button>
         </div>
         <div
           ref={logRef}
-          onScroll={handleScroll}
-          className="bg-black rounded-b-lg p-3 sm:p-4 text-[10px] sm:text-xs font-mono h-[calc(100vh-220px)] sm:h-[calc(100vh-240px)] overflow-y-auto"
+          className="bg-black rounded-b-lg p-4 text-xs font-mono h-[calc(100vh-220px)] overflow-y-auto"
         >
           {logs.length === 0 ? (
             <span className="text-text-muted">No console logs yet.</span>
           ) : (
             <div className="space-y-0.5">
               {logs.map((line, i) => (
-                <div key={i} className="break-all sm:break-normal">{colorLine(line)}</div>
+                <div key={i}>{colorLine(line)}</div>
               ))}
             </div>
           )}

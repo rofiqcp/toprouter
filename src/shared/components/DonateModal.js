@@ -15,14 +15,16 @@ export default function DonateModal({ isOpen, onClose }) {
     if (!isOpen || data) return;
     setLoading(true);
     setError("");
-    fetch(GITHUB_CONFIG.donateUrl, { cache: "no-store" })
+    const controller = new AbortController();
+    fetch(GITHUB_CONFIG.donateUrl, { cache: "no-store", signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((json) => setData(json))
-      .catch((err) => setError(err.message || "Failed to load"))
+      .catch((err) => { if (err.name !== "AbortError") { setError(err.message || "Failed to load"); console.warn("[DonateModal] Failed to load donate info:", err.message); } })
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, [isOpen, data]);
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export default function DonateModal({ isOpen, onClose }) {
         <div className="flex items-center justify-between p-3 border-b border-black/5 dark:border-white/5">
           <h2 className="text-lg font-semibold text-text-main flex items-center gap-2">
             <span className="material-symbols-outlined text-pink-500">volunteer_activism</span>
-            {data?.title || "Support TopRouter"}
+            {data?.title || "Support 9Router"}
           </h2>
           <button
             onClick={onClose}

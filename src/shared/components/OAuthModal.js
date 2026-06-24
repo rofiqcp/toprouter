@@ -20,6 +20,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   const [polling, setPolling] = useState(false);
   const popupRef = useRef(null);
   const pollingAbortRef = useRef(false);
+  const openedRef = useRef(false);
   const { copied, copy } = useCopyToClipboard();
 
   // State for client-only values to avoid hydration mismatch
@@ -156,7 +157,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       setError(null);
 
       // Device code flow providers
-      const deviceCodeProviders = ["github", "qwen", "kiro", "kimi-coding", "kilocode", "codebuddy", "qoder"];
+      const deviceCodeProviders = ["github", "qwen", "kiro", "kimi-coding", "kilocode", "codebuddy-cn", "qoder"];
       if (deviceCodeProviders.includes(provider)) {
         setIsDeviceCode(true);
         setStep("waiting");
@@ -310,6 +311,9 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   // Reset state and start OAuth when modal opens
   useEffect(() => {
     if (isOpen && provider) {
+      // Guard against StrictMode/effect re-runs auto-opening multiple tabs.
+      if (openedRef.current) return;
+      openedRef.current = true;
       setAuthData(null);
       setCallbackUrl("");
       setError(null);
@@ -321,6 +325,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     } else if (!isOpen) {
       // Abort polling and cleanup proxy when modal closes
       pollingAbortRef.current = true;
+      openedRef.current = false;
       if (provider === "codex") {
         fetch("/api/oauth/codex/stop-proxy").catch(() => {});
       } else if (provider === "xai") {
@@ -335,6 +340,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
     if (!pollProvider || !authData?.state) return;
     if (callbackProcessedRef.current) return;
     let cancelled = false;
+    let timerId = null;
     const POLL_INTERVAL_MS = 1500;
     const MAX_ATTEMPTS = 200; // ~5 minutes
     let attempts = 0;
@@ -343,7 +349,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       if (cancelled || callbackProcessedRef.current) return;
       attempts += 1;
       try {
-          const res = await fetch(`/api/oauth/${pollProvider}/poll-status?state=${encodeURIComponent(authData.state)}`);
+        const res = await fetch(`/api/oauth/${pollProvider}/poll-status?state=${encodeURIComponent(authData.state)}`);
         const data = await res.json();
         if (cancelled || callbackProcessedRef.current) return;
         if (data.status === "done") {
@@ -367,10 +373,13 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         setStep("error");
         return;
       }
-      setTimeout(tick, POLL_INTERVAL_MS);
+      if (!cancelled) timerId = setTimeout(tick, POLL_INTERVAL_MS);
     };
-    setTimeout(tick, POLL_INTERVAL_MS);
-    return () => { cancelled = true; };
+    timerId = setTimeout(tick, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (timerId) clearTimeout(timerId);
+    };
   }, [authData, onSuccess]);
 
   // Listen for OAuth callback via multiple methods

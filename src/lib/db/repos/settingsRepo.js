@@ -2,6 +2,7 @@ import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
 const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128";
+const DEFAULT_HEADROOM_URL = process.env.HEADROOM_URL || "http://localhost:8787";
 
 const DEFAULT_SETTINGS = {
   cloudEnabled: false,
@@ -34,8 +35,13 @@ const DEFAULT_SETTINGS = {
   mitmRouterBaseUrl: DEFAULT_MITM_ROUTER_BASE,
   dnsToolEnabled: {},
   rtkEnabled: true,
+  headroomEnabled: false,
+  headroomUrl: DEFAULT_HEADROOM_URL,
+  headroomCompressUserMessages: false,
   cavemanEnabled: false,
   cavemanLevel: "full",
+  ponytailEnabled: false,
+  ponytailLevel: "full",
 };
 
 async function readRaw() {
@@ -72,11 +78,11 @@ export async function getSettings() {
 export async function updateSettings(updates) {
   const db = await getAdapter();
   let next;
-  await db.transaction(async () => {
-    const row = await db.get(`SELECT data FROM settings WHERE id = 1`);
+  await db.transaction(async (tx) => {
+    const row = await tx.get(`SELECT data FROM settings WHERE id = 1`);
     const current = row ? parseJson(row.data, {}) : {};
     next = { ...current, ...updates };
-    await db.run(
+    await tx.run(
       `INSERT INTO settings(id, data) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data`,
       [stringifyJson(next)]
     );

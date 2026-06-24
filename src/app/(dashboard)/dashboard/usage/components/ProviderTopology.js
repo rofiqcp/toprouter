@@ -77,7 +77,7 @@ ProviderNode.propTypes = {
   data: PropTypes.object.isRequired,
 };
 
-// Center TopRouter node
+// Center 9Router node
 function RouterNode({ data }) {
   return (
     <div className="flex items-center justify-center px-5 py-3 rounded-xl border-2 border-primary bg-primary/5 shadow-md min-w-[130px]">
@@ -86,8 +86,8 @@ function RouterNode({ data }) {
       <Handle type="source" position={Position.Left} id="left" className="!bg-transparent !border-0 !w-0 !h-0" />
       <Handle type="source" position={Position.Right} id="right" className="!bg-transparent !border-0 !w-0 !h-0" />
 
-      <img src="/favicon.svg" alt="TopRouter" className="w-6 h-6 mr-2" />
-      <span className="text-sm font-bold text-primary">TopRouter</span>
+      <img src="/favicon.svg" alt="9Router" className="w-6 h-6 mr-2" />
+      <span className="text-sm font-bold text-primary">9Router</span>
       {data.activeCount > 0 && (
         <span className="ml-2 px-1.5 py-0.5 rounded-full bg-primary text-white text-xs font-bold">
           {data.activeCount}
@@ -149,7 +149,7 @@ function buildLayout(providers, activeSet, lastSet, errorSet) {
     const error = !active && errorSet.has(p.provider?.toLowerCase());
     const nodeId = `provider-${p.provider}`;
     const data = {
-      label: (config.name !== p.provider ? config.name : null) || p.name || p.provider,
+      label: (config.name !== p.provider ? config.name : null) || p.nodeName || p.name || p.provider,
       color: config.color || "#6b7280",
       imageUrl: getProviderImageUrl(p.provider),
       textIcon: config.textIcon || (p.provider || "?").slice(0, 2).toUpperCase(),

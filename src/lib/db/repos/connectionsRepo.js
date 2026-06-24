@@ -7,47 +7,36 @@ const OPTIONAL_FIELDS = [
   "accessToken", "refreshToken", "expiresAt", "tokenType",
   "scope", "projectId", "apiKey", "testStatus",
   "lastTested", "lastError", "lastErrorAt", "rateLimitedUntil", "expiresIn", "errorCode",
-  "consecutiveUseCount",
+  "consecutiveUseCount", "idToken", "lastRefreshAt",
 ];
 
 function rowToConn(row) {
   if (!row) return null;
-  // PG returns lowercase column names; normalize for both adapters
-  const r = {
-    ...row,
-    isActive: row.isActive ?? row.isactive,
-    authType: row.authType ?? row.authtype,
-    createdAt: row.createdAt ?? row.createdat,
-    updatedAt: row.updatedAt ?? row.updatedat,
-  };
-  const extra = parseJson(r.data, {});
+  const extra = parseJson(row.data, {});
   return {
     ...extra,
-    id: r.id,
-    provider: r.provider,
-    authType: r.authType,
-    name: r.name,
-    email: r.email,
-    priority: r.priority,
-    isActive: r.isActive === 1 || r.isActive === true,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
+    id: row.id,
+    provider: row.provider,
+    authType: row.authType,
+    name: row.name,
+    email: row.email,
+    priority: row.priority ?? null,
+    isActive: row.isActive === 1 || row.isActive === true,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
 function connToRow(c) {
   const { id, provider, authType, name, email, priority, isActive, createdAt, updatedAt, ...rest } = c;
   return {
-    id,
-    provider,
-    authType,
+    id, provider, authType,
     name: name ?? null,
     email: email ?? null,
     priority: priority ?? null,
     isActive: isActive === false ? 0 : 1,
     data: stringifyJson(rest),
-    createdAt,
-    updatedAt,
+    createdAt, updatedAt,
   };
 }
 
@@ -83,17 +72,15 @@ export async function getProviderConnectionById(id) {
   return rowToConn(row);
 }
 
-// Internal sync reorder — must be called INSIDE a transaction
-async function reorderInTx(db, providerId) {
-  const rows = await db.all(`SELECT * FROM providerConnections WHERE provider = ?`, [providerId]);
-  const list = rows.map(rowToConn);
+async function reorderInTx(tx, providerId) {
+  const list = (await tx.all(`SELECT * FROM providerConnections WHERE provider = ?`, [providerId])).map(rowToConn);
   list.sort((a, b) => {
     const pDiff = (a.priority || 0) - (b.priority || 0);
     if (pDiff !== 0) return pDiff;
     return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
   });
   for (let i = 0; i < list.length; i++) {
-    await db.run(`UPDATE providerConnections SET priority = ? WHERE id = ?`, [i + 1, list[i].id]);
+    await tx.run(`UPDATE providerConnections SET priority = ? WHERE id = ?`, [i + 1, list[i].id]);
   }
 }
 
@@ -102,9 +89,8 @@ export async function createProviderConnection(data) {
   const now = new Date().toISOString();
   let result;
 
-  await db.transaction(async (tx) => {
-    const allRows = await tx.all(`SELECT * FROM providerConnections WHERE provider = ?`, [data.provider]);
-    const all = allRows.map(rowToConn);
+  await db.transaction(async (db) => {
+    const all = (await db.all(`SELECT * FROM providerConnections WHERE provider = ?`, [data.provider])).map(rowToConn);
 
     let existing = null;
     if (data.authType === "oauth" && data.email) {
@@ -121,7 +107,7 @@ export async function createProviderConnection(data) {
 
     if (existing) {
       const merged = { ...existing, ...data, updatedAt: now };
-      await upsert(tx, merged);
+      await upsert(db, merged);
       result = merged;
       return;
     }
@@ -153,25 +139,24 @@ export async function createProviderConnection(data) {
     }
     if (data.email !== undefined) conn.email = data.email;
 
-    await upsert(tx, conn);
-    await reorderInTx(tx, data.provider);
+    await upsert(db, conn);
+    await reorderInTx(db, data.provider);
     result = conn;
   });
 
   return result;
 }
 
-// Critical: OAuth refresh token race — atomic merge inside transaction
 export async function updateProviderConnection(id, data) {
   const db = await getAdapter();
   let result;
-  await db.transaction(async (tx) => {
-    const row = await tx.get(`SELECT * FROM providerConnections WHERE id = ?`, [id]);
+  await db.transaction(async (db) => {
+    const row = await db.get(`SELECT * FROM providerConnections WHERE id = ?`, [id]);
     if (!row) { result = null; return; }
     const existing = rowToConn(row);
     const merged = { ...existing, ...data, updatedAt: new Date().toISOString() };
-    await upsert(tx, merged);
-    if (data.priority !== undefined) await reorderInTx(tx, existing.provider);
+    await upsert(db, merged);
+    if (data.priority !== undefined) await reorderInTx(db, existing.provider);
     result = merged;
   });
   return result;
@@ -180,11 +165,11 @@ export async function updateProviderConnection(id, data) {
 export async function deleteProviderConnection(id) {
   const db = await getAdapter();
   let ok = false;
-  await db.transaction(async (tx) => {
-    const row = await tx.get(`SELECT provider FROM providerConnections WHERE id = ?`, [id]);
+  await db.transaction(async (db) => {
+    const row = await db.get(`SELECT provider FROM providerConnections WHERE id = ?`, [id]);
     if (!row) return;
-    await tx.run(`DELETE FROM providerConnections WHERE id = ?`, [id]);
-    await reorderInTx(tx, row.provider);
+    await db.run(`DELETE FROM providerConnections WHERE id = ?`, [id]);
+    await reorderInTx(db, row.provider);
     ok = true;
   });
   return ok;
@@ -199,7 +184,7 @@ export async function deleteProviderConnectionsByProvider(providerId) {
 
 export async function reorderProviderConnections(providerId) {
   const db = await getAdapter();
-  await db.transaction(async (tx) => await reorderInTx(tx, providerId));
+  await db.transaction(async (tx) => { await reorderInTx(tx, providerId); });
 }
 
 export async function cleanupProviderConnections() {
@@ -212,8 +197,8 @@ export async function cleanupProviderConnections() {
     "consecutiveUseCount",
   ];
   let cleaned = 0;
-  await db.transaction(async (tx) => {
-    const rows = await tx.all(`SELECT * FROM providerConnections`);
+  await db.transaction(async (db) => {
+    const rows = await db.all(`SELECT * FROM providerConnections`);
     for (const row of rows) {
       const conn = rowToConn(row);
       let dirty = false;
@@ -227,7 +212,7 @@ export async function cleanupProviderConnections() {
         cleaned++;
         dirty = true;
       }
-      if (dirty) await upsert(tx, conn);
+      if (dirty) await upsert(db, conn);
     }
   });
   return cleaned;

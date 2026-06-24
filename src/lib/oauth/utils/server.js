@@ -1,5 +1,6 @@
 import http from "http";
 import { URL } from "url";
+import { CODEX_CONFIG } from "../constants/oauth.js";
 
 /**
  * Start a local HTTP server to receive OAuth callback
@@ -117,9 +118,10 @@ export function waitForCallback(timeoutMs = 300000) {
 // Singleton proxy server for Codex OAuth callback on fixed port
 let codexProxyServer = null;
 let codexProxyTimeout = null;
+let codexProxyStarting = false;
 
 const CODEX_PROXY_TIMEOUT_MS = 300000; // 5 minutes
-const CODEX_PORT = 1455;
+const CODEX_PORT = CODEX_CONFIG.fixedPort;
 
 // Pending exchange sessions keyed by state — used by server-side exchange mode
 const pendingExchanges = new Map();
@@ -172,10 +174,11 @@ function renderCodexResultPage(success, message) {
  */
 export function startCodexProxy(appPort) {
   return new Promise((resolve) => {
-    if (codexProxyServer) {
+    if (codexProxyServer || codexProxyStarting) {
       resolve({ success: true });
       return;
     }
+    codexProxyStarting = true;
 
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url, "http://localhost");
@@ -246,11 +249,13 @@ export function startCodexProxy(appPort) {
 
     server.listen(CODEX_PORT, "127.0.0.1", () => {
       codexProxyServer = server;
+      codexProxyStarting = false;
       codexProxyTimeout = setTimeout(() => stopCodexProxy(), CODEX_PROXY_TIMEOUT_MS);
       resolve({ success: true });
     });
 
     server.on("error", (err) => {
+      codexProxyStarting = false;
       if (err.code === "EADDRINUSE") {
         resolve({ success: false, reason: "port_busy" });
       } else {
@@ -282,6 +287,7 @@ export function stopCodexProxy() {
 
 let xaiProxyServer = null;
 let xaiProxyTimeout = null;
+let xaiProxyStarting = false;
 const XAI_PROXY_TIMEOUT_MS = 300000; // 5 minutes
 const XAI_PROXY_PORT = 56121;
 const xaiPendingExchanges = new Map();
@@ -316,10 +322,11 @@ function renderXaiResultPage(success, message) {
  */
 export function startXaiProxy(appPort) {
   return new Promise((resolve) => {
-    if (xaiProxyServer) {
+    if (xaiProxyServer || xaiProxyStarting) {
       resolve({ success: true });
       return;
     }
+    xaiProxyStarting = true;
 
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url, "http://localhost");
@@ -388,11 +395,13 @@ export function startXaiProxy(appPort) {
 
     server.listen(XAI_PROXY_PORT, "127.0.0.1", () => {
       xaiProxyServer = server;
+      xaiProxyStarting = false;
       xaiProxyTimeout = setTimeout(() => stopXaiProxy(), XAI_PROXY_TIMEOUT_MS);
       resolve({ success: true });
     });
 
     server.on("error", (err) => {
+      xaiProxyStarting = false;
       if (err.code === "EADDRINUSE") {
         resolve({ success: false, reason: "port_busy" });
       } else {

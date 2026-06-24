@@ -4,14 +4,13 @@ import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
 function rowToCombo(row) {
   if (!row) return null;
-  // PG returns lowercase column names; normalize
   return {
     id: row.id,
     name: row.name,
     kind: row.kind,
     models: parseJson(row.models, []),
-    createdAt: row.createdAt ?? row.createdat,
-    updatedAt: row.updatedAt ?? row.updatedat,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -54,11 +53,11 @@ export async function createCombo(data) {
 export async function updateCombo(id, data) {
   const db = await getAdapter();
   let result = null;
-  await db.transaction(async () => {
-    const row = await db.get(`SELECT * FROM combos WHERE id = ?`, [id]);
+  await db.transaction(async (tx) => {
+    const row = await tx.get(`SELECT * FROM combos WHERE id = ?`, [id]);
     if (!row) return;
     const merged = { ...rowToCombo(row), ...data, updatedAt: new Date().toISOString() };
-    await db.run(
+    await tx.run(
       `UPDATE combos SET name = ?, kind = ?, models = ?, updatedAt = ? WHERE id = ?`,
       [merged.name, merged.kind, stringifyJson(merged.models || []), merged.updatedAt, id]
     );

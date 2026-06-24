@@ -26,7 +26,7 @@ function customKey(providerAlias, id, type) {
 
 export async function getCustomModels() {
   const all = await customKv.getAll();
-  return Object.values(all);
+  return Object.values(all).filter(Boolean);
 }
 
 // Atomic check-then-insert inside transaction to prevent duplicate races
@@ -34,11 +34,11 @@ export async function addCustomModel({ providerAlias, id, type = "llm", name }) 
   const k = customKey(providerAlias, id, type);
   const db = await getAdapter();
   let added = false;
-  await db.transaction(async () => {
-    const row = await db.get(`SELECT 1 FROM kv WHERE scope = 'customModels' AND key = ?`, [k]);
+  await db.transaction(async (tx) => {
+    const row = await tx.get(`SELECT 1 FROM kv WHERE scope = 'customModels' AND key = ?`, [k]);
     if (row) return;
     const value = stringifyJson({ providerAlias, id, type, name: name || id });
-    await db.run(`INSERT INTO kv(scope, key, value) VALUES('customModels', ?, ?)`, [k, value]);
+    await tx.run(`INSERT INTO kv(scope, key, value) VALUES('customModels', ?, ?)`, [k, value]);
     added = true;
   });
   return added;

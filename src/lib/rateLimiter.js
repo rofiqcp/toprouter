@@ -54,12 +54,16 @@ export function getClientIp(request) {
   }
   const realIp = request.headers.get("x-real-ip");
   if (realIp) return realIp;
-  return "127.0.0.1";
+  // Fallback to connection remote address if available
+  const socket = request.socket || request._socket;
+  if (socket?.remoteAddress) return socket.remoteAddress;
+  // No identifiable IP — treat as unknown (rate-limit separately, don't bypass)
+  return null;
 }
 
 export async function checkRateLimit({ request, ipLimiter, keyLimiter, ip, apiKey }) {
-  const clientIp = ip || getClientIp(request);
-  if (!clientIp || isInternal(request)) return null;
+  const clientIp = ip || getClientIp(request) || "unknown";
+  if (isInternal(request)) return null;
 
   try {
     const ipResult = await ipLimiter.consume(clientIp);

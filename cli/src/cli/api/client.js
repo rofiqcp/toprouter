@@ -15,7 +15,7 @@ const DEFAULT_CONFIG = {
 
 const CLI_TOKEN_HEADER = "x-9r-cli-token";
 const CLI_TOKEN_SALT = "9r-cli-auth";
-const APP_NAME = "toprouter";
+const APP_NAME = "9router";
 
 function getDataDir() {
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
@@ -410,6 +410,14 @@ async function updateSettings(data) {
   return makeRequest("PATCH", "/api/settings", data);
 }
 
+/**
+ * Reset dashboard password to default (clears stored hash server-side)
+ * @returns {Promise<Object>} { success }
+ */
+async function resetPassword() {
+  return makeRequest("POST", "/api/auth/reset-password");
+}
+
 // ============================================================================
 // MODELS API
 // ============================================================================
@@ -528,6 +536,7 @@ module.exports = {
   // Settings
   getSettings,
   updateSettings,
+  resetPassword,
   
   // Tunnel
   getTunnelStatus,

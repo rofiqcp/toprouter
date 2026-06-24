@@ -89,8 +89,8 @@ function sortData(dataMap, pendingMap = {}, sortBy, sortOrder) {
     .map(([key, data]) => {
       const totalTokens = (data.promptTokens || 0) + (data.completionTokens || 0);
       const totalCost = data.cost || 0;
-      const inputCost = totalTokens > 0 ? (data.promptTokens || 0) * (totalCost / totalTokens) : 0;
-      const outputCost = totalTokens > 0 ? (data.completionTokens || 0) * (totalCost / totalTokens) : 0;
+      const inputCost = totalTokens > 0 && totalCost > 0 ? ((data.promptTokens || 0) / totalTokens) * totalCost : 0;
+      const outputCost = totalTokens > 0 && totalCost > 0 ? ((data.completionTokens || 0) / totalTokens) * totalCost : 0;
       return { ...data, key, totalTokens, totalCost, inputCost, outputCost, pending: pendingMap[key] || 0 };
     })
     .sort((a, b) => {
@@ -204,15 +204,25 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
   const [providers, setProviders] = useState([]);
   const [periodLocal, setPeriodLocal] = useState("today");
   const isInitialLoad = useRef(true);
+  const hasLoadedStats = useRef(false);
   const period = periodProp ?? periodLocal;
   const setPeriod = setPeriodProp ?? setPeriodLocal;
 
   // Fetch connected providers once, deduplicate by provider type
   // Always include noAuth free providers (e.g. opencode) regardless of connections
   useEffect(() => {
-    fetch("/api/providers")
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => {
+    const controller = new AbortController();
+    const signal = controller.signal;
+    Promise.all([
+      fetch("/api/providers", { signal }).then((r) => r.ok ? r.json() : null),
+      fetch("/api/provider-nodes", { signal }).then((r) => r.ok ? r.json() : null),
+    ])
+      .then(([d, nodesData]) => {
+        // Build node name lookup for custom providers
+        const nodeNameMap = {};
+        for (const node of (nodesData?.nodes || [])) {
+          nodeNameMap[node.id] = node.name;
+        }
         const seen = new Set();
         const unique = (d?.connections || []).filter((c) => {
           if (c.isActive === false) return false;
@@ -220,13 +230,17 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
           if (seen.has(c.provider)) return false;
           seen.add(c.provider);
           return true;
-        });
+        }).map((c) => ({
+          ...c,
+          nodeName: nodeNameMap[c.provider] || null,
+        }));
         const noAuthProviders = Object.values(FREE_PROVIDERS)
           .filter((p) => p.noAuth && !seen.has(p.id) && isLLMProvider(p.id))
           .map((p) => ({ provider: p.id, name: p.name }));
         setProviders([...unique, ...noAuthProviders]);
       })
-      .catch(() => {});
+      .catch((err) => { if (err.name !== "AbortError") console.warn("[UsageStats] Failed to load providers:", err.message); });
+    return () => controller.abort();
   }, []);
 
   // Fetch filtered stats via REST when period changes
@@ -239,54 +253,75 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
       setFetching(true);
     }
 
-    fetch(`/api/usage/stats?period=${period}`)
+    const controller = new AbortController();
+    fetch(`/api/usage/stats?period=${period}`, { signal: controller.signal })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
-        if (data) setStats((prev) => ({ ...prev, ...data }));
+        if (data) {
+          hasLoadedStats.current = true;
+          setStats((prev) => ({ ...prev, ...data }));
+        }
       })
-      .catch(() => {})
+      .catch((err) => { if (err.name !== "AbortError") console.warn("[UsageStats] Failed to load stats:", err.message); })
       .finally(() => {
         setLoading(false);
         setFetching(false);
       });
-  }, [period]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // SSE connection - real-time updates for ALL stats fields
-  useEffect(() => {
-    const es = new EventSource("/api/usage/stream");
-
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        // Merge ALL fields from SSE for real-time table/card updates
-        setStats((prev) => ({
-          ...(prev || {}),
-          ...data,
-        }));
-        setLoading(false);
-      } catch (err) {
-        console.error("[SSE CLIENT] parse error:", err);
-      }
-    };
-
-    es.onerror = () => setLoading(false);
-
-    return () => es.close();
-  }, []);
-
-  // Periodic auto-refresh (10s) as backup for SSE drops
-  useEffect(() => {
-    const refresh = () => {
-      fetch(`/api/usage/stats?period=${period}`)
-        .then((r) => r.ok ? r.json() : null)
-        .then((data) => {
-          if (data) setStats((prev) => ({ ...prev, ...data }));
-        })
-        .catch(() => {});
-    };
-    const id = setInterval(refresh, 10000);
-    return () => clearInterval(id);
+    return () => controller.abort();
   }, [period]);
+
+  // SSE connection - real-time updates for activeRequests + recentRequests only
+  useEffect(() => {
+    let es = null;
+    let reconnectTimer = null;
+    let backoffMs = 1000;
+    const MAX_BACKOFF_MS = 30000;
+
+    const connect = () => {
+      if (es) es.close();
+      es = new EventSource("/api/usage/stream");
+
+      es.onopen = () => {
+        backoffMs = 1000; // Reset backoff on successful connection
+      };
+
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          setStats((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              activeRequests: data.activeRequests,
+              recentRequests: data.recentRequests,
+              errorProvider: data.errorProvider,
+              pending: data.pending,
+            };
+          });
+          if (hasLoadedStats.current) setLoading(false);
+        } catch (err) {
+          console.error("[SSE CLIENT] parse error:", err);
+        }
+      };
+
+      es.onerror = () => {
+        setLoading(false);
+        if (es) es.close();
+        // Exponential backoff reconnection
+        reconnectTimer = setTimeout(() => {
+          backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+          connect();
+        }, backoffMs);
+      };
+    };
+
+    connect();
+
+    return () => {
+      if (es) es.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
+  }, []);
 
   const toggleSort = useCallback((tableType, field) => {
     const params = new URLSearchParams(searchParams.toString());

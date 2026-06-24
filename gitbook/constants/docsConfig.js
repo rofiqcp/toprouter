@@ -236,7 +236,7 @@ export const DOCS_CONFIG = {
   title: "9Router Documentation",
   description: "Smart AI model router - Maximize subscriptions, minimize costs",
   logo: "9Router",
-  appUrl: "https://toprouter.com",
-  githubUrl: "https://github.com/decolua/toprouter",
+  appUrl: "https://9router.com",
+  githubUrl: "https://github.com/decolua/9router",
   navigation: getNavigation(DEFAULT_LANG)
 };

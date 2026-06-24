@@ -82,16 +82,6 @@ function CollapsibleSection({ title, children, defaultOpen = false, icon = null 
   );
 }
 
-function formatJSON(data) {
-  if (data == null) return "[No data]";
-  try {
-    const obj = typeof data === 'string' ? JSON.parse(data) : data;
-    return JSON.stringify(obj, null, 2);
-  } catch {
-    return typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-  }
-}
-
 function getInputTokens(tokens) {
   const prompt = tokens?.prompt_tokens || tokens?.input_tokens || 0;
   const cache = tokens?.cached_tokens || tokens?.cache_read_input_tokens || 0;
@@ -248,7 +238,7 @@ export default function RequestDetailsTab() {
 
       <Card padding="none">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] sm:min-w-[880px]">
+          <table className="w-full min-w-[880px]">
             <thead>
               <tr className="border-b border-black/5 dark:border-white/5">
                 <th className="text-left p-4 text-sm font-semibold text-text-main">Timestamp</th>
@@ -338,7 +328,7 @@ export default function RequestDetailsTab() {
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         title="Request Details"
-        width="xl"
+        width="lg"
       >
         {selectedDetail && (
           <div className="space-y-6">
@@ -390,23 +380,26 @@ export default function RequestDetailsTab() {
             
             <div className="space-y-4">
               <CollapsibleSection title="1. Client Request (Input)" defaultOpen={true} icon="input">
-                <pre className="max-h-[400px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4 whitespace-pre-wrap break-words">
-                  {formatJSON(selectedDetail.request)}
+                <pre className="max-h-[600px] w-full overflow-auto whitespace-pre-wrap break-all rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
+                  {JSON.stringify(selectedDetail.request, null, 2)}
                 </pre>
               </CollapsibleSection>
 
               {selectedDetail.providerRequest && (
                 <CollapsibleSection title="2. Provider Request (Translated)" icon="translate">
-                  <pre className="max-h-[400px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4 whitespace-pre-wrap break-words">
-                    {formatJSON(selectedDetail.providerRequest)}
+                  <pre className="max-h-[600px] w-full overflow-auto whitespace-pre-wrap break-all rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
+                    {JSON.stringify(selectedDetail.providerRequest, null, 2)}
                   </pre>
                 </CollapsibleSection>
               )}
 
               {selectedDetail.providerResponse && (
                 <CollapsibleSection title="3. Provider Response (Raw)" icon="data_object">
-                  <pre className="max-h-[400px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4 whitespace-pre-wrap break-words">
-                    {formatJSON(selectedDetail.providerResponse)}
+                  <pre className="max-h-[600px] w-full overflow-auto whitespace-pre-wrap break-all rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
+                    {typeof selectedDetail.providerResponse === 'object'
+                      ? JSON.stringify(selectedDetail.providerResponse, null, 2)
+                      : selectedDetail.providerResponse
+                    }
                   </pre>
                 </CollapsibleSection>
               )}
@@ -418,7 +411,7 @@ export default function RequestDetailsTab() {
                       <span className="material-symbols-outlined text-[16px]">psychology</span>
                       Thinking Process
                     </h4>
-                    <pre className="max-h-[200px] max-w-full overflow-auto rounded-lg border border-amber-200 bg-amber-50 p-3 font-mono text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:p-4 whitespace-pre-wrap break-words">
+                    <pre className="max-h-[400px] w-full overflow-auto whitespace-pre-wrap break-all rounded-lg border border-amber-200 bg-amber-50 p-3 font-mono text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:p-4">
                       {selectedDetail.response.thinking}
                     </pre>
                   </div>
@@ -427,7 +420,7 @@ export default function RequestDetailsTab() {
                 <h4 className="font-semibold text-text-main mb-2 text-xs uppercase tracking-wide opacity-70">
                   Content
                 </h4>
-                <pre className="max-h-[400px] max-w-full overflow-auto rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4 whitespace-pre-wrap break-words">
+                <pre className="max-h-[600px] w-full overflow-auto whitespace-pre-wrap break-all rounded-lg border border-black/5 bg-black/5 p-3 font-mono text-xs text-text-main dark:border-white/5 dark:bg-white/5 sm:p-4">
                   {selectedDetail.response?.content || "[No content]"}
                 </pre>
               </CollapsibleSection>

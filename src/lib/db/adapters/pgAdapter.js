@@ -14,6 +14,55 @@ const TABLE_PKS = {
   _meta: ["key"],
 };
 
+// Column name mappings: PG lowercase → camelCase (SQLite compat)
+const COLUMN_MAP = {
+  authtype: "authType",
+  isactive: "isActive",
+  createdat: "createdAt",
+  updatedat: "updatedAt",
+  apikey: "apiKey",
+  machineid: "machineId",
+  accesstoken: "accessToken",
+  refreshtoken: "refreshToken",
+  expiresat: "expiresAt",
+  tokenType: "tokenType",
+  tokentype: "tokenType",
+  teststatus: "testStatus",
+  lasttested: "lastTested",
+  lasterror: "lastError",
+  lasterrorat: "lastErrorAt",
+  ratelimiteduntil: "rateLimitedUntil",
+  expiresin: "expiresIn",
+  errorcode: "errorCode",
+  consecutiveusecount: "consecutiveUseCount",
+  idtoken: "idToken",
+  lastrefreshat: "lastRefreshAt",
+  defaultmodel: "defaultModel",
+  displayname: "displayName",
+  globalpriority: "globalPriority",
+  prompttokens: "promptTokens",
+  completiontokens: "completionTokens",
+  connectionid: "connectionId",
+  baseurl: "baseUrl",
+  providerspecificdata: "providerSpecificData",
+  datekey: "dateKey",
+  authType: "authType",
+};
+
+function normalizeRow(row) {
+  if (!row || typeof row !== "object") return row;
+  const out = {};
+  for (const [k, v] of Object.entries(row)) {
+    const mapped = COLUMN_MAP[k] || k;
+    out[mapped] = v;
+  }
+  return out;
+}
+
+function normalizeRows(rows) {
+  return rows.map(normalizeRow);
+}
+
 // Translate SQLite SQL to PostgreSQL-compatible SQL
 // Also converts ? placeholders to $1, $2, etc. for PostgreSQL
 function translateSQL(sql) {
@@ -79,7 +128,7 @@ function createTxAdapter(client) {
       const t = translateSQL(sql);
       if (t === null) return Promise.resolve(undefined);
       return client.query(t, params).then((r) =>
-        r.rows.length > 0 ? r.rows[0] : undefined,
+        r.rows.length > 0 ? normalizeRow(r.rows[0]) : undefined,
       );
     },
     all(sql, params = []) {
@@ -94,7 +143,7 @@ function createTxAdapter(client) {
       }
       const t = translateSQL(sql);
       if (t === null) return Promise.resolve([]);
-      return client.query(t, params).then((r) => r.rows);
+      return client.query(t, params).then((r) => normalizeRows(r.rows));
     },
     exec(sql) {
       const t = translateSQL(sql);
@@ -139,7 +188,7 @@ export function createPgAdapter() {
     const t = translateSQL(sql);
     if (t === null) return undefined;
     const r = await _query(t, params);
-    return r.rows.length > 0 ? r.rows[0] : undefined;
+    return r.rows.length > 0 ? normalizeRow(r.rows[0]) : undefined;
   }
 
   async function all(sql, params = []) {
@@ -156,7 +205,7 @@ export function createPgAdapter() {
     const t = translateSQL(sql);
     if (t === null) return [];
     const r = await _query(t, params);
-    return r.rows;
+    return normalizeRows(r.rows);
   }
 
   async function exec(sql) {

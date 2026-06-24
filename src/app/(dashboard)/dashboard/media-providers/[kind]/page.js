@@ -158,22 +158,25 @@ export default function MediaProviderKindPage() {
 
   useEffect(() => {
     if (!kindConfig) return;
-    fetch("/api/providers", { cache: "no-store" })
+    const controller = new AbortController();
+    const signal = controller.signal;
+    fetch("/api/providers", { cache: "no-store", signal })
       .then((r) => r.json())
       .then((d) => setConnections(d.connections || []))
-      .catch(() => {});
+      .catch((err) => { if (err.name !== "AbortError") console.warn("[MediaProviders] Failed to load providers:", err.message); });
     if (isEmbedding) {
-      fetch("/api/provider-nodes", { cache: "no-store" })
+      fetch("/api/provider-nodes", { cache: "no-store", signal })
         .then((r) => r.json())
         .then((d) => setCustomNodes((d.nodes || []).filter((n) => n.type === "custom-embedding")))
-        .catch(() => {});
+        .catch((err) => { if (err.name !== "AbortError") console.warn("[MediaProviders] Failed to load nodes:", err.message); });
     }
     if (supportsCombo) {
-      fetch("/api/combos", { cache: "no-store" })
+      fetch("/api/combos", { cache: "no-store", signal })
         .then((r) => r.json())
         .then((d) => setCombos(d.combos || []))
-        .catch(() => {});
+        .catch((err) => { if (err.name !== "AbortError") console.warn("[MediaProviders] Failed to load combos:", err.message); });
     }
+    return () => controller.abort();
   }, [isEmbedding, supportsCombo, kindConfig]);
 
   if (!kindConfig) return notFound();

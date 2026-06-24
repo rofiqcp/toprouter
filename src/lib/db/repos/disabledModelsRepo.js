@@ -21,11 +21,11 @@ export async function getDisabledByProvider(providerAlias) {
 export async function disableModels(providerAlias, ids) {
   if (!providerAlias || !Array.isArray(ids)) return;
   const db = await getAdapter();
-  await db.transaction(async () => {
-    const row = await db.get(`SELECT value FROM kv WHERE scope = ? AND key = ?`, [SCOPE, providerAlias]);
+  await db.transaction(async (tx) => {
+    const row = await tx.get(`SELECT value FROM kv WHERE scope = ? AND key = ?`, [SCOPE, providerAlias]);
     const current = row ? (parseJson(row.value, []) || []) : [];
     const merged = [...new Set([...current, ...ids])];
-    await db.run(
+    await tx.run(
       `INSERT INTO kv(scope, key, value) VALUES(?, ?, ?) ON CONFLICT(scope, key) DO UPDATE SET value = excluded.value`,
       [SCOPE, providerAlias, stringifyJson(merged)]
     );
@@ -35,19 +35,19 @@ export async function disableModels(providerAlias, ids) {
 export async function enableModels(providerAlias, ids) {
   if (!providerAlias) return;
   const db = await getAdapter();
-  await db.transaction(async () => {
+  await db.transaction(async (tx) => {
     if (!Array.isArray(ids) || ids.length === 0) {
-      await db.run(`DELETE FROM kv WHERE scope = ? AND key = ?`, [SCOPE, providerAlias]);
+      await tx.run(`DELETE FROM kv WHERE scope = ? AND key = ?`, [SCOPE, providerAlias]);
       return;
     }
-    const row = await db.get(`SELECT value FROM kv WHERE scope = ? AND key = ?`, [SCOPE, providerAlias]);
+    const row = await tx.get(`SELECT value FROM kv WHERE scope = ? AND key = ?`, [SCOPE, providerAlias]);
     const current = row ? (parseJson(row.value, []) || []) : [];
     const removeSet = new Set(ids);
     const next = current.filter((id) => !removeSet.has(id));
     if (next.length === 0) {
-      await db.run(`DELETE FROM kv WHERE scope = ? AND key = ?`, [SCOPE, providerAlias]);
+      await tx.run(`DELETE FROM kv WHERE scope = ? AND key = ?`, [SCOPE, providerAlias]);
     } else {
-      await db.run(
+      await tx.run(
         `INSERT INTO kv(scope, key, value) VALUES(?, ?, ?) ON CONFLICT(scope, key) DO UPDATE SET value = excluded.value`,
         [SCOPE, providerAlias, stringifyJson(next)]
       );

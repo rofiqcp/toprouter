@@ -47,7 +47,7 @@ const { ensureSqliteRuntime, buildEnvWithRuntime } = require("./hooks/sqliteRunt
 const { ensureTrayRuntime } = require("./hooks/trayRuntime");
 const args = process.argv.slice(2);
 
-// Self-heal SQLite runtime deps (sql.js + better-sqlite3) into ~/.toprouter/runtime
+// Self-heal SQLite runtime deps (sql.js + better-sqlite3) into ~/.9router/runtime
 // so the server can resolve them via NODE_PATH. Best-effort — sql.js is required,
 // better-sqlite3 is optional. Logs to stderr only on failure.
 try { ensureSqliteRuntime({ silent: true }); } catch {}
@@ -61,10 +61,25 @@ const INSTALL_CMD_LATEST = `npm i -g ${APP_NAME}@latest --prefer-online`;
 
 const DEFAULT_PORT = 20128;
 const DEFAULT_HOST = "0.0.0.0";
+
+// First non-internal IPv4 — the address remote peers actually reach when bound to 0.0.0.0.
+function getLanIp() {
+  for (const ifaces of Object.values(os.networkInterfaces())) {
+    for (const i of ifaces || []) {
+      if (i.family === "IPv4" && !i.internal) return i.address;
+    }
+  }
+  return null;
+}
+
+// Local URL stays "localhost"; warn separately when bound to all interfaces (network-exposed).
+function getDisplayHost() {
+  return host === DEFAULT_HOST ? "localhost" : host;
+}
 const MAX_PORT_ATTEMPTS = 10;
-// Identifiers for killAllAppProcesses - only kill toprouter specifically
+// Identifiers for killAllAppProcesses - only kill 9router specifically
 const PROCESS_IDENTIFIERS = [
-  'toprouter'  // Only package name - avoid killing other apps
+  '9router'  // Only package name - avoid killing other apps
 ];
 
 // Parse arguments
@@ -135,8 +150,8 @@ function compareVersions(a, b) {
 // Get app data dir (matches app/src/lib/dataDir.js convention)
 function getAppDataDir() {
   return process.platform === "win32"
-    ? path.join(process.env.APPDATA || "", "toprouter")
-    : path.join(os.homedir(), ".toprouter");
+    ? path.join(process.env.APPDATA || "", "9router")
+    : path.join(os.homedir(), ".9router");
 }
 
 // Kill PID from file (best-effort, removes file after)
@@ -193,7 +208,7 @@ function killCloudflaredByAppPort(appPort) {
   return pids;
 }
 
-// Kill all toprouter processes
+// Kill all 9router processes
 function killAllAppProcesses(appPort) {
   return new Promise((resolve) => {
     try {
@@ -219,11 +234,11 @@ function killAllAppProcesses(appPort) {
           });
           const lines = output.split("\n").slice(1).filter(l => l.trim());
           lines.forEach(line => {
-            // Whitelist: real node process running toprouter/cli.js, or next-server.
-            // Avoids killing editors/grep/strace/cursor that just have "toprouter" in cmdline.
+            // Whitelist: real node process running 9router/cli.js, or next-server.
+            // Avoids killing editors/grep/strace/cursor that just have "9router" in cmdline.
             const cmd = line.toLowerCase();
             const isAppProcess =
-              (cmd.includes("node") && cmd.includes("toprouter") && (cmd.includes("cli.js") || cmd.includes("\\toprouter") || cmd.includes("/toprouter")))
+              (cmd.includes("node") && cmd.includes("9router") && (cmd.includes("cli.js") || cmd.includes("\\9router") || cmd.includes("/9router")))
               || cmd.includes("next-server");
             if (isAppProcess) {
               const match = line.match(/^"(\d+)"/);
@@ -245,11 +260,11 @@ function killAllAppProcesses(appPort) {
           const lines = output.split('\n');
 
           lines.forEach(line => {
-            // Whitelist: real node process running toprouter/cli.js, or next-server.
-            // Avoids killing grep/strace/editors/cursor that incidentally match "toprouter".
+            // Whitelist: real node process running 9router/cli.js, or next-server.
+            // Avoids killing grep/strace/editors/cursor that incidentally match "9router".
             const cmd = line.toLowerCase();
             const isAppProcess =
-              (cmd.includes("node") && cmd.includes("toprouter") && (cmd.includes("cli.js") || cmd.includes("/toprouter")))
+              (cmd.includes("node") && cmd.includes("9router") && (cmd.includes("cli.js") || cmd.includes("/9router")))
               || cmd.includes("next-server");
             if (isAppProcess) {
               const parts = line.trim().split(/\s+/);
@@ -470,9 +485,13 @@ function openBrowser(url) {
   });
 }
 
-// Find standalone server (bundled in bin/app for published package)
+// Find standalone server (bundled in bin/app for published package).
+// Prefer custom-server.js (injects real socket IP) when present.
 const standaloneDir = path.join(__dirname, "app");
-const serverPath = path.join(standaloneDir, "server.js");
+const customServerPath = path.join(standaloneDir, "custom-server.js");
+const serverPath = fs.existsSync(customServerPath)
+  ? customServerPath
+  : path.join(standaloneDir, "server.js");
 
 if (!fs.existsSync(serverPath)) {
   console.error("Error: Standalone build not found.");
@@ -497,7 +516,7 @@ async function showInterfaceMenu(latestVersion) {
 
   clearScreen();
 
-  const displayHost = host === DEFAULT_HOST ? "localhost" : host;
+  const displayHost = getDisplayHost();
 
   // Detect tunnel/local mode for server URL display
   let serverUrl;
@@ -538,8 +557,13 @@ const MAX_RESTARTS = 2;
 const RESTART_RESET_MS = 30000; // Reset counter if alive > 30s
 
 function startServer(latestVersion) {
-  const displayHost = host === DEFAULT_HOST ? "localhost" : host;
+  const displayHost = getDisplayHost();
   const url = `http://${displayHost}:${port}/dashboard`;
+  // Surface real network exposure when bound to all interfaces (default 0.0.0.0).
+  if (host === DEFAULT_HOST) {
+    const lanIp = getLanIp();
+    if (lanIp) console.log(`\x1b[33m⚠ Network-exposed: reachable at http://${lanIp}:${port} (bound 0.0.0.0). Use --host 127.0.0.1 for local-only.\x1b[0m`);
+  }
 
   let restartCount = 0;
   let serverStartTime = Date.now();
@@ -774,7 +798,7 @@ function startServer(latestVersion) {
     if (restartCount >= MAX_RESTARTS) {
       console.error(`\n⚠️  Server crashed ${MAX_RESTARTS} times. Disabling MIT and restarting...`);
       try {
-        const dbPath = path.join(os.homedir(), process.platform === "win32" ? path.join("AppData", "Roaming", "toprouter", "db.json") : path.join(".toprouter", "db.json"));
+        const dbPath = path.join(os.homedir(), process.platform === "win32" ? path.join("AppData", "Roaming", "9router", "db.json") : path.join(".9router", "db.json"));
         if (fs.existsSync(dbPath)) {
           const db = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
           if (db.settings) db.settings.mitmEnabled = false;

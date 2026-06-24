@@ -8,14 +8,9 @@ import { makeBackupDir, backupFile, pruneOldBackups } from "./backup.js";
 import { getAppVersion } from "./version.js";
 import { stringifyJson } from "./helpers/jsonCol.js";
 
-// Marker file: prevents re-importing legacy JSON when user wipes data.sqlite.
 const MIGRATED_MARKER = path.join(DB_DIR, ".migrated-from-json");
-
-// Track per-adapter so reusing same adapter skips re-run, but new adapter (after reset) re-runs.
 const _migratedAdapters = new WeakSet();
 
-// Thrown when row-count assertion fails. Outer transaction rolls back,
-// legacy db.json kept intact, marker not written → next boot retries.
 export class MigrationAborted extends Error {
   constructor(message, droppedRows) {
     super(message);
@@ -24,25 +19,14 @@ export class MigrationAborted extends Error {
   }
 }
 
-// ─── Async-safe meta helpers (work with both sync SQLite and async PG adapters) ──
-async function getMetaAsync(adapter, key, fallback = null) {
-  const row = await adapter.get(`SELECT value FROM _meta WHERE key = ?`, [key]);
-  return row ? row.value : fallback;
-}
-
-async function setMetaAsync(adapter, key, value) {
-  await adapter.run(`INSERT INTO _meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [key, String(value)]);
-}
-
-// ─── Async-safe import with assertion ──────────────────────────────────────
 async function importWithAssertion(adapter, tableName, rows, insertFn, rowMeta) {
   const dropped = [];
   for (const row of rows) {
     try { await insertFn(row); }
     catch (err) { dropped.push({ ...rowMeta(row), reason: err.message }); }
   }
-  const countRow = await adapter.get(`SELECT COUNT(*) as c FROM ${tableName}`);
-  const inserted = countRow?.c ?? 0;
+  const r = await adapter.get(`SELECT COUNT(*) as c FROM ${tableName}`);
+  const inserted = r?.c ?? 0;
   if (inserted !== rows.length) {
     console.warn(`[DB][migrate] ${tableName} row-count mismatch: expected ${rows.length}, got ${inserted}. Dropped:`, dropped);
     throw new MigrationAborted(`${tableName} row-count mismatch: expected ${rows.length}, got ${inserted}`, dropped);
@@ -63,12 +47,10 @@ async function isFreshDb(adapter) {
   }
 }
 
-// ─── Versioned migrations runner (skip-version safe) ─────────────────────
 async function runVersionedMigrations(adapter) {
-  // Bootstrap _meta first so we can read schemaVersion
   await adapter.exec(buildCreateTableSql("_meta", TABLES._meta));
 
-  const current = parseInt((await getMetaAsync(adapter, "schemaVersion", "0")), 10) || 0;
+  const current = parseInt((await getMetaSync(adapter, "schemaVersion", "0")), 10) || 0;
   const target = latestVersion();
   if (current >= target) return { applied: 0, from: current, to: current };
 
@@ -77,7 +59,7 @@ async function runVersionedMigrations(adapter) {
   for (const m of pending) {
     await adapter.transaction(async () => {
       await m.up(adapter);
-      await setMetaAsync(adapter, "schemaVersion", String(m.version));
+      await setMetaSync(adapter, "schemaVersion", String(m.version));
     });
     lastApplied = m.version;
     console.log(`[DB][migrate] applied #${m.version} ${m.name}`);
@@ -85,38 +67,40 @@ async function runVersionedMigrations(adapter) {
   return { applied: pending.length, from: current, to: lastApplied };
 }
 
-// ─── Auto-sync (additive only): add missing tables/columns/indexes ───────
 async function syncSchemaFromTables(adapter) {
   for (const [tableName, def] of Object.entries(TABLES)) {
-    // Create table if absent
     await adapter.exec(buildCreateTableSql(tableName, def));
 
-    // Diff columns
-    const existing = await adapter.all(`PRAGMA table_info(${tableName})`);
-    const existingNames = new Set(existing.map((r) => r.name));
-    for (const [colName, colDef] of Object.entries(def.columns)) {
-      if (!existingNames.has(colName)) {
-        const safeDef = colDef
-          .replace(/PRIMARY KEY( AUTOINCREMENT)?/i, "")
-          .replace(/UNIQUE/i, "")
-          .trim();
-        try {
-          await adapter.exec(`ALTER TABLE ${tableName} ADD COLUMN ${colName} ${safeDef}`);
-          console.log(`[DB][sync] +column ${tableName}.${colName}`);
-        } catch (e) {
-          console.warn(`[DB][sync] add column ${tableName}.${colName} failed: ${e.message}`);
+    try {
+      const existing = await adapter.all(`SELECT name, type, cid FROM _sqlite_table_info_cache WHERE table_name = ?`, [tableName]);
+
+      if (existing && existing.length > 0) {
+        const existingNames = new Set(existing.map((r) => r.name));
+        for (const [colName, colDef] of Object.entries(def.columns)) {
+          if (!existingNames.has(colName)) {
+            const safeDef = colDef
+              .replace(/PRIMARY KEY( AUTOINCREMENT)?/i, "")
+              .replace(/UNIQUE/i, "")
+              .trim();
+            try {
+              await adapter.exec(`ALTER TABLE ${tableName} ADD COLUMN ${colName} ${safeDef}`);
+              console.log(`[DB][sync] +column ${tableName}.${colName}`);
+            } catch (e) {
+              console.warn(`[DB][sync] add column ${tableName}.${colName} failed: ${e.message}`);
+            }
+          }
         }
       }
+    } catch {
+      // Fallback: try PRAGMA (SQLite only) or skip for PG
     }
 
-    // Indexes (idempotent)
     for (const idx of def.indexes || []) {
       try { await adapter.exec(idx); } catch {}
     }
   }
 }
 
-// ─── Legacy JSON import (one-time) ───────────────────────────────────────
 async function importLegacyMain(adapter, data) {
   if (!data || typeof data !== "object") return;
 
@@ -199,7 +183,7 @@ async function importLegacyUsage(adapter, data) {
     await adapter.run(`INSERT OR REPLACE INTO usageDaily(dateKey, data) VALUES(?, ?)`, [dateKey, stringifyJson(day)]);
   }
   if (typeof data.totalRequestsLifetime === "number") {
-    await setMetaAsync(adapter, "totalRequestsLifetime", String(data.totalRequestsLifetime));
+    await setMetaSync(adapter, "totalRequestsLifetime", String(data.totalRequestsLifetime));
   }
 }
 
@@ -220,21 +204,16 @@ async function importLegacyDetails(adapter, data) {
   }
 }
 
-// ─── Main entry ──────────────────────────────────────────────────────────
 export async function runMigrationOnce(adapter) {
   if (_migratedAdapters.has(adapter)) return;
   _migratedAdapters.add(adapter);
 
-  // Capture freshness BEFORE migrations stamp _meta
   const fresh = await isFreshDb(adapter);
 
-  // 1. Always run versioned migrations chain
   const migInfo = await runVersionedMigrations(adapter);
 
-  // 2. Additive sync (auto add missing columns/indexes)
   await syncSchemaFromTables(adapter);
 
-  // 3. One-time legacy JSON import
   const alreadyImported = fs.existsSync(MIGRATED_MARKER);
   const legacyMain = readJsonSafe(LEGACY_FILES.main);
   const legacyUsage = readJsonSafe(LEGACY_FILES.usage);
@@ -253,8 +232,8 @@ export async function runMigrationOnce(adapter) {
         await importLegacyUsage(adapter, legacyUsage);
         await importLegacyDisabled(adapter, legacyDisabled);
         await importLegacyDetails(adapter, legacyDetails);
-        await setMetaAsync(adapter, "appVersion", getAppVersion());
-        await setMetaAsync(adapter, "migratedAt", new Date().toISOString());
+        await setMetaSync(adapter, "appVersion", getAppVersion());
+        await setMetaSync(adapter, "migratedAt", new Date().toISOString());
       });
     } catch (err) {
       if (err instanceof MigrationAborted) {
@@ -266,22 +245,21 @@ export async function runMigrationOnce(adapter) {
 
     try { fs.writeFileSync(MIGRATED_MARKER, new Date().toISOString()); } catch {}
     pruneOldBackups();
-    console.log(`[DB][migrate] JSON → DB in ${Date.now() - t0}ms | legacy JSON kept at DATA_DIR | backup: ${backupDir}`);
+    console.log(`[DB][migrate] JSON → SQLite in ${Date.now() - t0}ms | legacy JSON kept at DATA_DIR | backup: ${backupDir}`);
     return;
   }
 
   if (fresh) {
-    await setMetaAsync(adapter, "appVersion", getAppVersion());
+    await setMetaSync(adapter, "appVersion", getAppVersion());
     return;
   }
 
-  // 4. App version bump → backup
-  const oldVer = await getMetaAsync(adapter, "appVersion", null);
+  const oldVer = await getMetaSync(adapter, "appVersion", null);
   const newVer = getAppVersion();
   if (oldVer && oldVer !== newVer) {
     const backupDir = makeBackupDir(`upgrade-${oldVer}-to-${newVer}`);
     try { backupFile(DATA_FILE, backupDir); } catch {}
-    await setMetaAsync(adapter, "appVersion", newVer);
+    await setMetaSync(adapter, "appVersion", newVer);
     pruneOldBackups();
     console.log(`[DB][migrate] App ${oldVer} → ${newVer} | schema ${migInfo.from} → ${migInfo.to} | backup: ${backupDir}`);
   } else if (migInfo.applied > 0) {

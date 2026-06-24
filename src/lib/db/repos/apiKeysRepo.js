@@ -3,20 +3,13 @@ import { getAdapter } from "../driver.js";
 
 function rowToKey(row) {
   if (!row) return null;
-  // PG returns lowercase column names; normalize
-  const r = {
-    ...row,
-    machineId: row.machineId ?? row.machineid,
-    isActive: row.isActive ?? row.isactive,
-    createdAt: row.createdAt ?? row.createdat,
-  };
   return {
-    id: r.id,
-    key: r.key,
-    name: r.name,
-    machineId: r.machineId,
-    isActive: r.isActive === 1 || r.isActive === true,
-    createdAt: r.createdAt,
+    id: row.id,
+    key: row.key,
+    name: row.name,
+    machineId: row.machineId,
+    isActive: row.isActive === 1 || row.isActive === true,
+    createdAt: row.createdAt,
   };
 }
 
@@ -55,11 +48,11 @@ export async function createApiKey(name, machineId) {
 export async function updateApiKey(id, data) {
   const db = await getAdapter();
   let result = null;
-  await db.transaction(async () => {
-    const row = await db.get(`SELECT * FROM apiKeys WHERE id = ?`, [id]);
+  await db.transaction(async (tx) => {
+    const row = await tx.get(`SELECT * FROM apiKeys WHERE id = ?`, [id]);
     if (!row) return;
     const merged = { ...rowToKey(row), ...data };
-    await db.run(
+    await tx.run(
       `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ? WHERE id = ?`,
       [merged.key, merged.name, merged.machineId, merged.isActive ? 1 : 0, id]
     );
@@ -78,6 +71,5 @@ export async function validateApiKey(key) {
   const db = await getAdapter();
   const row = await db.get(`SELECT isActive FROM apiKeys WHERE key = ?`, [key]);
   if (!row) return false;
-  const isActive = row.isActive ?? row.isactive;
-  return isActive === 1 || isActive === true;
+  return row.isActive === 1 || row.isActive === true;
 }

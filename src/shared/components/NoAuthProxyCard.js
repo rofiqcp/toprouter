@@ -15,17 +15,17 @@ export default function NoAuthProxyCard({ providerId }) {
   const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    const signal = controller.signal;
     Promise.all([
-      fetch("/api/proxy-pools?isActive=true", { cache: "no-store" }).then((r) => r.ok ? r.json() : { proxyPools: [] }),
-      fetch("/api/settings", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}),
+      fetch("/api/proxy-pools?isActive=true", { cache: "no-store", signal }).then((r) => r.ok ? r.json() : { proxyPools: [] }),
+      fetch("/api/settings", { cache: "no-store", signal }).then((r) => r.ok ? r.json() : {}),
     ]).then(([poolData, settingsData]) => {
-      if (cancelled) return;
       setProxyPools(poolData.proxyPools || []);
       const override = (settingsData.providerStrategies || {})[providerId] || {};
       setProxyPoolId(override.proxyPoolId || NONE_PROXY_POOL_VALUE);
-    }).catch(() => {});
-    return () => { cancelled = true; };
+    }).catch((err) => { if (err.name !== "AbortError") console.warn("[NoAuthProxyCard] Failed to load settings:", err.message); });
+    return () => controller.abort();
   }, [providerId]);
 
   const handleChange = async (newValue) => {

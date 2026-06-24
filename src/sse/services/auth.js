@@ -5,15 +5,8 @@ import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import * as log from "../utils/logger.js";
 
-// Per-provider mutexes to prevent race conditions during account selection
-const selectionMutexes = new Map();
-
-function getMutexForProvider(key) {
-  if (!selectionMutexes.has(key)) {
-    selectionMutexes.set(key, Promise.resolve());
-  }
-  return selectionMutexes.get(key);
-}
+// Mutex to prevent race conditions during account selection
+let selectionMutex = Promise.resolve();
 
 /**
  * Get provider credentials from localDb
@@ -28,11 +21,10 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     ? excludeConnectionIds
     : (excludeConnectionIds ? new Set([excludeConnectionIds]) : new Set());
   const preferredConnectionId = options?.preferredConnectionId || null;
-  // Acquire per-provider mutex to prevent race conditions
-  const mutexKey = provider;
-  const currentMutex = getMutexForProvider(mutexKey);
+  // Acquire mutex to prevent race conditions
+  const currentMutex = selectionMutex;
   let resolveMutex;
-  selectionMutexes.set(mutexKey, new Promise(resolve => { resolveMutex = resolve; }));
+  selectionMutex = new Promise(resolve => { resolveMutex = resolve; });
 
   try {
     await currentMutex;
@@ -171,6 +163,10 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       apiKey: connection.apiKey,
       accessToken: connection.accessToken,
       refreshToken: connection.refreshToken,
+      idToken: connection.idToken,
+      expiresAt: connection.expiresAt,
+      expiresIn: connection.expiresIn,
+      lastRefreshAt: connection.lastRefreshAt,
       projectId: connection.projectId,
       connectionName: connection.displayName || connection.name || connection.email || connection.id,
       copilotToken: connection.providerSpecificData?.copilotToken,

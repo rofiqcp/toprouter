@@ -21,14 +21,16 @@ export default function McpMarketplaceModal({ isOpen, onClose, onAdd, addedNames
     if (!isOpen) return;
     if (servers.length > 0) return;
     setLoading(true);
-    fetch(REGISTRY_ENDPOINT)
+    const controller = new AbortController();
+    fetch(REGISTRY_ENDPOINT, { signal: controller.signal })
       .then((r) => r.json())
       .then((d) => {
         if (d.error) setError(d.error);
         else setServers(d.servers || []);
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => { if (e.name !== "AbortError") { setError(e.message); console.warn("[McpMarketplace] Failed to load registry:", e.message); } })
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, [isOpen]);
 
   const addedSet = useMemo(() => new Set(addedNames), [addedNames]);

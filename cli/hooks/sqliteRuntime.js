@@ -7,12 +7,13 @@ const os = require("os");
 const path = require("path");
 
 const BETTER_SQLITE3_VERSION = "12.6.2";
+const SQL_JS_VERSION = "1.14.1";
 
 function getDataDir() {
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
   return process.platform === "win32"
-    ? path.join(process.env.APPDATA || os.homedir(), "toprouter")
-    : path.join(os.homedir(), ".toprouter");
+    ? path.join(process.env.APPDATA || os.homedir(), "9router")
+    : path.join(os.homedir(), ".9router");
 }
 
 function getRuntimeDir() {
@@ -31,10 +32,10 @@ function ensureRuntimeDir() {
   const pkgPath = path.join(dir, "package.json");
   if (!fs.existsSync(pkgPath)) {
     fs.writeFileSync(pkgPath, JSON.stringify({
-      name: "toprouter-runtime",
+      name: "9router-runtime",
       version: "1.0.0",
       private: true,
-      description: "User-writable runtime deps for toprouter (better-sqlite3 native binary)",
+      description: "User-writable runtime deps for 9router (better-sqlite3 native binary)",
     }, null, 2));
   }
   return dir;
@@ -102,20 +103,36 @@ function npmInstall(pkgs, opts = {}) {
 }
 
 // Public: ensure better-sqlite3 native module is installed in user-writable
-// runtime dir. sql.js is bundled in bin/app already; node:sqlite is built-in.
-// This is purely a *speed optimization* — app works without it via fallbacks.
+// runtime dir. sql.js may be bundled in bin/app, but npm publish strips .wasm
+// from nested node_modules — verify and reinstall if missing. node:sqlite is
+// built-in. This is purely a *speed optimization* — app works without
+// better-sqlite3 via fallbacks.
+function isSqlJsWasmValid() {
+  const bundledWasm = path.join(__dirname, "..", "app", "node_modules", "sql.js", "dist", "sql-wasm.wasm");
+  if (fs.existsSync(bundledWasm)) return true;
+  const runtimeWasm = path.join(getRuntimeNodeModules(), "sql.js", "dist", "sql-wasm.wasm");
+  return fs.existsSync(runtimeWasm);
+}
+
 function ensureSqliteRuntime({ silent = false } = {}) {
   ensureRuntimeDir();
+
+  let sqlJsOk = isSqlJsWasmValid();
+  if (!sqlJsOk) {
+    sqlJsOk = npmInstall([`sql.js@${SQL_JS_VERSION}`], { silent });
+    if (sqlJsOk) sqlJsOk = isSqlJsWasmValid();
+  }
 
   const needBetterSqlite = !hasModule("better-sqlite3") || !isBetterSqliteBinaryValid();
   if (!needBetterSqlite) {
     if (!silent) console.log("✅ SQLite engine ready");
-    return { betterSqlite: true };
+    return { betterSqlite: true, sqlJs: sqlJsOk };
   }
 
   const ok = npmInstall([`better-sqlite3@${BETTER_SQLITE3_VERSION}`], { optional: true, silent });
   return {
     betterSqlite: ok && hasModule("better-sqlite3") && isBetterSqliteBinaryValid(),
+    sqlJs: sqlJsOk,
   };
 }
 

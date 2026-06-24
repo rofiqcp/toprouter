@@ -50,7 +50,7 @@ function ModelItem({ index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown
 }
 
 // Reusable Combo create/edit modal. forcePrefix auto-prepends to name.
-export default function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindFilter = null, forcePrefix = "", title }) {
+export default function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindFilter = null, forcePrefix = "", title, modelAliases: propAliases = {} }) {
   // Strip prefix when editing existing combo so user only edits suffix
   const initialName = combo?.name
     ? (forcePrefix && combo.name.startsWith(forcePrefix) ? combo.name.slice(forcePrefix.length) : combo.name)
@@ -60,12 +60,15 @@ export default function ComboFormModal({ isOpen, combo, onClose, onSave, activeP
   const [showModelSelect, setShowModelSelect] = useState(false);
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState("");
-  const [modelAliases, setModelAliases] = useState({});
+  const [localAliases, setLocalAliases] = useState({});
+
+  const modelAliases = Object.keys(propAliases).length > 0 ? propAliases : localAliases;
 
   useEffect(() => {
     if (!isOpen) return;
-    fetch("/api/models/alias").then((r) => r.ok ? r.json() : null).then((d) => d && setModelAliases(d.aliases || {})).catch(() => {});
-  }, [isOpen]);
+    if (Object.keys(propAliases).length > 0) return;
+    fetch("/api/models/alias").then((r) => r.ok ? r.json() : null).then((d) => d && setLocalAliases(d.aliases || {})).catch(() => {});
+  }, [isOpen, propAliases]);
 
   const validateName = (value) => {
     if (!value.trim()) { setNameError("Name is required"); return false; }
@@ -84,9 +87,11 @@ export default function ComboFormModal({ isOpen, combo, onClose, onSave, activeP
   };
 
   const handleAddModel = (model) => {
+    if (!model?.value) return;
     if (!models.includes(model.value)) setModels([...models, model.value]);
   };
   const handleDeselectModel = (model) => {
+    if (!model?.value) return;
     setModels(models.filter((m) => m !== model.value));
   };
   const handleRemoveModel = (i) => setModels(models.filter((_, idx) => idx !== i));

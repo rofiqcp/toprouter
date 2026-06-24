@@ -62,20 +62,11 @@ export async function createNodeSqliteAdapter(filePath) {
     },
     exec(sql) { return db.exec(sql); },
     transaction(fn) {
-      // Support both sync and async callbacks.
-      // node:sqlite has no native transaction wrapper — use SAVEPOINT for nested support.
-      // Pass 'this' as tx so repos that use tx.all/tx.run/tx.get work transparently.
-      const adapter = this;
+      // node:sqlite has no transaction wrapper. Use SAVEPOINT for nested support.
       const sp = `sp_${Math.random().toString(36).slice(2)}`;
       db.exec(`SAVEPOINT ${sp}`);
       try {
-        const r = fn(adapter);
-        if (r instanceof Promise) {
-          return r.then(
-            (val) => { db.exec(`RELEASE ${sp}`); return val; },
-            (e) => { try { db.exec(`ROLLBACK TO ${sp}`); db.exec(`RELEASE ${sp}`); } catch {} throw e; }
-          );
-        }
+        const r = fn();
         db.exec(`RELEASE ${sp}`);
         return r;
       } catch (e) {

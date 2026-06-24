@@ -44,22 +44,7 @@ export function createBetterSqliteAdapter(filePath) {
     get(sql, params = []) { return prepare(sql).get(params); },
     all(sql, params = []) { return prepare(sql).all(params); },
     exec(sql) { return db.exec(sql); },
-    transaction(fn) {
-      // better-sqlite3's native transaction() cannot wrap async functions.
-      // Use manual BEGIN/COMMIT/ROLLBACK to support both sync and async callbacks.
-      // Pass 'this' as tx so repos that use tx.all/tx.run/tx.get work transparently.
-      const adapter = this;
-      const result = fn(adapter);
-      if (result instanceof Promise) {
-        db.exec("BEGIN");
-        return result.then(
-          (r) => { db.exec("COMMIT"); return r; },
-          (e) => { try { db.exec("ROLLBACK"); } catch {} throw e; }
-        );
-      }
-      // Sync path: use native transaction for full rollback on throw
-      return db.transaction(() => fn(adapter))();
-    },
+    transaction(fn) { return db.transaction(fn)(); },
     checkpoint() { try { db.pragma("wal_checkpoint(TRUNCATE)"); } catch {} },
     close() {
       clearInterval(checkpointTimer);

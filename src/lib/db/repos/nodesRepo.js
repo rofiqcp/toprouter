@@ -4,28 +4,13 @@ import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
 function rowToNode(row) {
   if (!row) return null;
-  // PG returns lowercase column names; normalize
   const extra = parseJson(row.data, {});
-  return {
-    ...extra,
-    id: row.id,
-    type: row.type,
-    name: row.name,
-    createdAt: row.createdAt ?? row.createdat,
-    updatedAt: row.updatedAt ?? row.updatedat,
-  };
+  return { ...extra, id: row.id, type: row.type, name: row.name, createdAt: row.createdAt, updatedAt: row.updatedAt };
 }
 
 function nodeToRow(n) {
   const { id, type, name, createdAt, updatedAt, ...rest } = n;
-  return {
-    id,
-    type: type ?? null,
-    name: name ?? null,
-    data: stringifyJson(rest),
-    createdAt,
-    updatedAt,
-  };
+  return { id, type: type ?? null, name: name ?? null, data: stringifyJson(rest), createdAt, updatedAt };
 }
 
 async function upsert(db, n) {
@@ -45,27 +30,20 @@ export async function getProviderNodes(filter = {}) {
   const params = [];
   if (filter.type) { where.push("type = ?"); params.push(filter.type); }
   const sql = `SELECT * FROM providerNodes${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
-  return (await db.all(sql, params)).map(rowToNode);
+  const rows = await db.all(sql, params);
+  return rows.map(rowToNode);
 }
 
 export async function getProviderNodeById(id) {
   const db = await getAdapter();
-  return rowToNode(await db.get(`SELECT * FROM providerNodes WHERE id = ?`, [id]));
+  const row = await db.get(`SELECT * FROM providerNodes WHERE id = ?`, [id]);
+  return rowToNode(row);
 }
 
 export async function createProviderNode(data) {
   const db = await getAdapter();
   const now = new Date().toISOString();
-  const node = {
-    id: data.id || uuidv4(),
-    type: data.type,
-    name: data.name,
-    prefix: data.prefix,
-    apiType: data.apiType,
-    baseUrl: data.baseUrl,
-    createdAt: now,
-    updatedAt: now,
-  };
+  const node = { id: data.id || uuidv4(), type: data.type, name: data.name, prefix: data.prefix, apiType: data.apiType, baseUrl: data.baseUrl, createdAt: now, updatedAt: now };
   await upsert(db, node);
   return node;
 }
@@ -73,7 +51,7 @@ export async function createProviderNode(data) {
 export async function updateProviderNode(id, data) {
   const db = await getAdapter();
   let result = null;
-  await db.transaction(async () => {
+  await db.transaction(async (db) => {
     const row = await db.get(`SELECT * FROM providerNodes WHERE id = ?`, [id]);
     if (!row) return;
     const merged = { ...rowToNode(row), ...data, updatedAt: new Date().toISOString() };
@@ -86,7 +64,7 @@ export async function updateProviderNode(id, data) {
 export async function deleteProviderNode(id) {
   const db = await getAdapter();
   let removed = null;
-  await db.transaction(async () => {
+  await db.transaction(async (db) => {
     const row = await db.get(`SELECT * FROM providerNodes WHERE id = ?`, [id]);
     if (!row) return;
     removed = rowToNode(row);

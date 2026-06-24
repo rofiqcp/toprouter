@@ -29,11 +29,22 @@ export const MITM_TOOLS = {
     description: "GitHub Copilot IDE with MITM",
     configType: "mitm",
     mitmDomain: "api.individual.githubcopilot.com",
-    modelAliases: ["gpt-4o-mini", "claude-haiku-4.5", "gpt-4o", "gpt-5-mini"],
+    modelAliases: ["gpt-5-mini", "gpt-5.4-nano", "claude-haiku-4.5", "gpt-4o", "gpt-4.1"],
     defaultModels: [
+      // Verified via live MITM passthrough capture of the GitHub Copilot CLI: its model
+      // picker offers "GPT-5 mini" (default → wire id "gpt-5-mini"), "Claude Haiku 4.5"
+      // ("claude-haiku-4.5") and "Auto". "Auto" is NOT a wire id — Copilot dispatches
+      // concrete models dynamically (observed "gpt-5.4-nano" for light tasks and
+      // "claude-haiku-4.5"), so it needs no slot of its own. Without a slot for
+      // gpt-5-mini / gpt-5.4-nano, getMappedModel returns null and the /chat/completions
+      // call is passed through to GitHub Copilot instead of the configured provider —
+      // and gpt-5-mini is the CLI default, so the primary turn leaks (same class as the
+      // Kiro "auto" misrouting). gpt-4o / gpt-4.1 are kept for the VS Code Copilot Chat picker.
+      { id: "gpt-5-mini", name: "GPT-5 mini", alias: "gpt-5-mini" },
+      { id: "gpt-5.4-nano", name: "GPT-5.4 nano", alias: "gpt-5.4-nano" },
+      { id: "claude-haiku-4.5", name: "Claude Haiku 4.5", alias: "claude-haiku-4.5" },
       { id: "gpt-4o", name: "GPT-4o", alias: "gpt-4o" },
       { id: "gpt-4.1", name: "GPT-4.1", alias: "gpt-4.1" },
-      { id: "claude-haiku-4.5", name: "Claude Haiku 4.5", alias: "claude-haiku-4.5" },
     ],
   },
   kiro: {
@@ -117,15 +128,14 @@ export const CLI_TOOLS = {
     description: "OpenCode AI Terminal Assistant",
     configType: "custom",
   },
-  // Cowork disabled: spawns arbitrary processes (RCE risk). Hidden from CLI tools UI.
-  // cowork: {
-  //   id: "cowork",
-  //   name: "Claude Cowork",
-  //   image: "/providers/claude.png",
-  //   color: "#D97757",
-  //   description: "Claude Desktop Cowork (third-party inference)",
-  //   configType: "custom",
-  // },
+  cowork: {
+    id: "cowork",
+    name: "Claude Cowork",
+    image: "/providers/claude.png",
+    color: "#D97757",
+    description: "Claude Desktop Cowork (third-party inference)",
+    configType: "custom",
+  },
   hermes: {
     id: "hermes",
     name: "Hermes Agent",
@@ -229,7 +239,7 @@ export const CLI_TOOLS = {
     defaultCommand: "amp",
     modelAliases: ["g25p", "g25f", "cs45", "g54"],
     notes: [
-      { type: "info", text: "Use TopRouter model aliases to keep Amp shorthand mappings stable across provider updates." },
+      { type: "info", text: "Use 9Router model aliases to keep Amp shorthand mappings stable across provider updates." },
       { type: "warning", text: "Suggested shorthand examples: g25p → gemini/gemini-2.5-pro, g25f → gemini/gemini-2.5-flash, cs45 → cc/claude-sonnet-4-5-20250929." },
     ],
     guideSteps: [
@@ -237,7 +247,7 @@ export const CLI_TOOLS = {
       { step: 2, title: "API Key", type: "apiKeySelector" },
       { step: 3, title: "Base URL", value: "{{baseUrl}}", copyable: true },
       { step: 4, title: "Select Model", type: "modelSelector" },
-      { step: 5, title: "Add Shorthands", desc: "Map Amp shorthand names such as g25p or cs45 to TopRouter aliases in your local config." },
+      { step: 5, title: "Add Shorthands", desc: "Map Amp shorthand names such as g25p or cs45 to 9Router aliases in your local config." },
     ],
     codeBlock: {
       language: "bash",
@@ -254,15 +264,15 @@ amp --model "{{model}}"
     name: "Qwen Code",
     image: "/providers/qwen.png",
     color: "#10B981",
-    description: "Alibaba Qwen Code CLI — supports OpenAI, Anthropic & Gemini providers via TopRouter",
+    description: "Alibaba Qwen Code CLI — supports OpenAI, Anthropic & Gemini providers via 9Router",
     docsUrl: "https://qwenlm.github.io/qwen-code-docs/en/users/configuration/model-providers/",
     configType: "guide",
     defaultCommand: "qwen",
     notes: [
-      { type: "info", text: "Qwen Code supports multiple provider types (openai, anthropic, gemini) via modelProviders in settings.json. TopRouter works as an OpenAI-compatible endpoint." },
-      { type: "info", text: "Any model available in TopRouter can be used — not just Qwen models. Select from Qwen, Claude, Gemini, GPT, and more." },
+      { type: "info", text: "Qwen Code supports multiple provider types (openai, anthropic, gemini) via modelProviders in settings.json. 9Router works as an OpenAI-compatible endpoint." },
+      { type: "info", text: "Any model available in 9Router can be used — not just Qwen models. Select from Qwen, Claude, Gemini, GPT, and more." },
       { type: "warning", text: "Config path: Linux/macOS ~/.qwen/settings.json • Windows %USERPROFILE%\\.qwen\\settings.json" },
-      { type: "error", text: "Qwen OAuth free tier was discontinued on 2026-04-15. Use TopRouter with alicode/openrouter/anthropic/gemini providers instead." },
+      { type: "error", text: "Qwen OAuth free tier was discontinued on 2026-04-15. Use 9Router with alicode/openrouter/anthropic/gemini providers instead." },
     ],
     modelAliases: ["coder-model", "qwen3-coder-plus", "qwen3-coder-flash", "vision-model", "claude-sonnet-4-6", "claude-opus-4-6-thinking", "gemini-3-flash", "gemini-3.1-pro-high"],
     defaultModels: [
@@ -314,7 +324,7 @@ amp --model "{{model}}"
       { id: "deepseek-chat", name: "DeepSeek V3 Chat", alias: "deepseek-chat" },
     ],
     notes: [
-      { type: "info", text: "DeepSeek TUI uses ~/.deepseek/config.toml for configuration. TopRouter will update the provider to 'openai' mode with your base_url, api_key, and model." },
+      { type: "info", text: "DeepSeek TUI uses ~/.deepseek/config.toml for configuration. 9Router will update the provider to 'openai' mode with your base_url, api_key, and model." },
       { type: "warning", text: "Config path: Linux/macOS ~/.deepseek/config.toml • Windows %USERPROFILE%\\.deepseek\\config.toml" },
     ],
   },
@@ -333,7 +343,7 @@ amp --model "{{model}}"
       },
       {
         type: "info",
-        text: "Configure toprouter as an OpenAI-compatible provider to route all jcode requests through toprouter's optimization layer."
+        text: "Configure 9router as an OpenAI-compatible provider to route all jcode requests through 9router's optimization layer."
       },
       {
         type: "warning",

@@ -8,11 +8,6 @@ const RING_CAP = 50;
 const CONN_CACHE_TTL_MS = 30 * 1000;
 const PERIOD_MS = { "24h": 86400000, "7d": 604800000, "30d": 2592000000, "60d": 5184000000 };
 
-const BATCH_SIZE = 50;
-const FLUSH_INTERVAL_MS = 1000;
-let usageBatchBuffer = [];
-let batchFlushTimer = null;
-
 // In-memory state shared across Next.js modules
 if (!global._pendingRequests) global._pendingRequests = { byModel: {}, byAccount: {} };
 if (!global._lastErrorProvider) global._lastErrorProvider = { provider: "", ts: 0 };
@@ -247,56 +242,47 @@ export async function getActiveRequests() {
 
 export async function saveRequestUsage(entry) {
   try {
+    const db = await getAdapter();
+
     if (!entry.timestamp) entry.timestamp = new Date().toISOString();
     entry.cost = await calculateCost(entry.provider, entry.model, entry.tokens);
 
-    usageBatchBuffer.push(entry);
+    const tokens = entry.tokens || {};
+    const promptTokens = tokens.prompt_tokens || tokens.input_tokens || 0;
+    const completionTokens = tokens.completion_tokens || tokens.output_tokens || 0;
+
+    // All 3 writes (history insert, daily upsert, lifetime counter) in ONE transaction.
+    // better-sqlite3 is sync → no JS yield mid-transaction → no race in same process.
+    await db.transaction(async (tx) => {
+      await tx.run(
+        `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          entry.timestamp, entry.provider || null, entry.model || null,
+          entry.connectionId || null, entry.apiKey || null, entry.endpoint || null,
+          promptTokens, completionTokens, entry.cost || 0, entry.status || "ok",
+          stringifyJson(tokens), stringifyJson({}),
+        ]
+      );
+
+      const dateKey = getLocalDateKey(entry.timestamp);
+      const row = await tx.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]);
+      const day = row ? parseJson(row.data, {}) : {
+        requests: 0, promptTokens: 0, completionTokens: 0, cost: 0,
+        byProvider: {}, byModel: {}, byAccount: {}, byApiKey: {}, byEndpoint: {},
+      };
+      aggregateEntryToDay(day, entry);
+      await tx.run(`INSERT INTO usageDaily(dateKey, data) VALUES(?, ?) ON CONFLICT(dateKey) DO UPDATE SET data = excluded.data`, [dateKey, stringifyJson(day)]);
+
+      // Atomic counter increment in same transaction
+      const cur = await tx.get(`SELECT value FROM _meta WHERE key = 'totalRequestsLifetime'`);
+      const next = (cur ? parseInt(cur.value, 10) : 0) + 1;
+      await tx.run(`INSERT INTO _meta(key, value) VALUES('totalRequestsLifetime', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [String(next)]);
+    });
+
     pushToRing(entry);
     statsEmitter.emit("update");
-
-    if (usageBatchBuffer.length >= BATCH_SIZE) {
-      await flushUsageBatch();
-    } else if (!batchFlushTimer) {
-      batchFlushTimer = setTimeout(flushUsageBatch, FLUSH_INTERVAL_MS);
-    }
   } catch (e) {
     console.error("Failed to save usage stats:", e);
-  }
-}
-
-export async function flushUsageBatch() {
-  if (usageBatchBuffer.length === 0) return;
-
-  const batch = usageBatchBuffer.splice(0);
-  clearTimeout(batchFlushTimer);
-  batchFlushTimer = null;
-
-  try {
-    const db = await getAdapter();
-
-    db.transaction(() => {
-      for (const entry of batch) {
-        const tokens = entry.tokens || {};
-        const promptTokens = tokens.prompt_tokens || tokens.input_tokens || 0;
-        const completionTokens = tokens.completion_tokens || tokens.output_tokens || 0;
-
-        db.run(
-          `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            entry.timestamp, entry.provider || null, entry.model || null,
-            entry.connectionId || null, entry.apiKey || null, entry.endpoint || null,
-            promptTokens, completionTokens, entry.cost || 0, entry.status || "ok",
-            stringifyJson(tokens), stringifyJson({}),
-          ]
-        );
-      }
-
-      const cur = db.get(`SELECT value FROM _meta WHERE key = 'totalRequestsLifetime'`);
-      const next = (cur ? parseInt(cur.value, 10) : 0) + batch.length;
-      db.run(`INSERT INTO _meta(key, value) VALUES('totalRequestsLifetime', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [String(next)]);
-    });
-  } catch (e) {
-    console.error("Failed to flush usage batch:", e);
   }
 }
 

@@ -6,6 +6,7 @@ import Link from "next/link";
 import PropTypes from "prop-types";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import HeaderMenu from "@/shared/components/HeaderMenu";
+import HeaderLanguage from "@/shared/components/HeaderLanguage";
 import ThemeToggle from "@/shared/components/ThemeToggle";
 import DonateModal from "@/shared/components/DonateModal";
 import { useHeaderSearchStore } from "@/store/headerSearchStore";
@@ -107,7 +108,7 @@ const getPageInfo = (pathname) => {
   if (pathname.includes("/mitm"))
     return {
       title: "MITM Proxy",
-      description: "Intercept CLI tool traffic and route through TopRouter",
+      description: "Intercept CLI tool traffic and route through 9Router",
       icon: "security",
       breadcrumbs: [],
     };
@@ -128,7 +129,7 @@ const getPageInfo = (pathname) => {
   if (pathname.includes("/skills"))
     return {
       title: "Agent Skills",
-      description: "Copy a link and paste to your AI to use TopRouter — no install needed",
+      description: "Copy a link and paste to your AI to use 9Router — no install needed",
       icon: "extension",
       breadcrumbs: [],
     };
@@ -315,6 +316,7 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
           <span className="hidden sm:inline">Donate</span>
         </button>
         <ThemeToggle />
+        <HeaderLanguage />
         <HeaderMenu onLogout={handleLogout} />
       </div>
       <DonateModal isOpen={donateOpen} onClose={() => setDonateOpen(false)} />

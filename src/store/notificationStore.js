@@ -6,6 +6,7 @@
 import { create } from "zustand";
 
 let idCounter = 0;
+const timers = new Map();
 
 export const useNotificationStore = create((set, get) => ({
   notifications: [],
@@ -24,19 +25,34 @@ export const useNotificationStore = create((set, get) => ({
 
     set((s) => ({ notifications: [...s.notifications, entry] }));
 
-    // Auto-dismiss
+    // Auto-dismiss with tracked timer
     if (entry.duration > 0) {
-      setTimeout(() => get().removeNotification(id), entry.duration);
+      const timerId = setTimeout(() => {
+        timers.delete(id);
+        get().removeNotification(id);
+      }, entry.duration);
+      timers.set(id, timerId);
     }
 
     return id;
   },
 
   removeNotification: (id) => {
+    // Clear auto-dismiss timer if present
+    const timerId = timers.get(id);
+    if (timerId) {
+      clearTimeout(timerId);
+      timers.delete(id);
+    }
     set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) }));
   },
 
-  clearAll: () => set({ notifications: [] }),
+  clearAll: () => {
+    // Clear all pending timers
+    for (const timerId of timers.values()) clearTimeout(timerId);
+    timers.clear();
+    set({ notifications: [] });
+  },
 
   success: (message, title) => get().addNotification({ type: "success", message, title }),
   error: (message, title) => get().addNotification({ type: "error", message, title, duration: 8000 }),

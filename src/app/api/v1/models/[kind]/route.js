@@ -3,10 +3,12 @@ import { buildModelsList } from "../route.js";
 // URL slug → service kind(s). `web` covers both webSearch and webFetch.
 const KIND_SLUG_MAP = {
   "image": ["image"],
+  "image-edit": ["imageEdit"],
   "tts": ["tts"],
   "stt": ["stt"],
   "embedding": ["embedding"],
   "image-to-text": ["imageToText"],
+  "video": ["video"],
   "web": ["webSearch", "webFetch"],
 };
 

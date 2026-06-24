@@ -35,19 +35,21 @@ const checkInstalled = async () => {
 const readJson = async (filePath) => {
   try {
     const content = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(content);
+    // Tolerate JSONC (trailing commas) and treat unparseable files as "no config"
+    // rather than throwing a 500 that the UI misreads as "tool not installed".
+    const stripped = content.replace(/,(\s*[}\]])/g, "$1");
+    return JSON.parse(stripped);
   } catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw error;
+    return null;
   }
 };
 
-const hasTopRouterConfig = (globalState) => {
+const has9RouterConfig = (globalState) => {
   if (!globalState) return false;
   const isOpenAi =
     globalState.actModeApiProvider === "openai" || globalState.planModeApiProvider === "openai";
   const baseUrl = globalState.openAiBaseUrl || "";
-  return isOpenAi && (baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1") || baseUrl.includes("toprouter"));
+  return isOpenAi && (baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1") || baseUrl.includes("9router"));
 };
 
 export async function GET() {
@@ -65,7 +67,7 @@ export async function GET() {
         openAiBaseUrl: globalState?.openAiBaseUrl,
         openAiModelId: globalState?.openAiModelId,
       },
-      hasTopRouter: hasTopRouterConfig(globalState),
+      has9Router: has9RouterConfig(globalState),
       globalStatePath: getGlobalStatePath(),
     });
   } catch (error) {
@@ -125,7 +127,7 @@ export async function DELETE() {
     delete secrets.openAiApiKey;
     await fs.writeFile(getSecretsPath(), JSON.stringify(secrets, null, 2));
 
-    return NextResponse.json({ success: true, message: "TopRouter settings removed from Cline" });
+    return NextResponse.json({ success: true, message: "9Router settings removed from Cline" });
   } catch (error) {
     console.log("Error resetting cline settings:", error);
     return NextResponse.json({ error: "Failed to reset cline settings" }, { status: 500 });

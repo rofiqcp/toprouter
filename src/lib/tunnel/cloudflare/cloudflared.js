@@ -404,19 +404,15 @@ export async function spawnQuickTunnel(localPort, onUrlUpdate) {
 }
 
 // Kill cloudflared processes whose command line targets the given port (any host).
-// Boundary check ensures :20129 doesn't match :201290 or :202129.
-// Only kills quick-tunnel processes (those with --url flag), NOT named tunnels
-// (which use "tunnel run --token" or "tunnel --config ... run <name>").
+// Boundary check ensures :20128 doesn't match :201280 or :202128.
 function killCloudflaredByPort(port) {
   if (!port) return;
   try {
     if (IS_WINDOWS) {
-      const psCmd = `Get-CimInstance Win32_Process -Filter \\\\\"Name='cloudflared.exe'\\\\\" | Where-Object { $_.CommandLine -match '--url.*:${port}(\\\\D|$)' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
+      const psCmd = `Get-CimInstance Win32_Process -Filter \\"Name='cloudflared.exe'\\" | Where-Object { $_.CommandLine -match ':${port}(\\D|$)' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
       execSync(`${POWERSHELL_HIDDEN_COMMAND} "${psCmd}"`, { stdio: "ignore", windowsHide: true });
     } else {
-      // Only kill quick-tunnel processes: must have BOTH --url AND :port in cmdline
-      // Named tunnels use "tunnel run --token" or "tunnel --config ... run <name>" — no --url flag
-      execSync(`pkill -f "cloudflared.*--url.*:${port}([^0-9]|$)" 2>/dev/null || true`, { stdio: "ignore", windowsHide: true });
+      execSync(`pkill -f "cloudflared.*:${port}([^0-9]|$)" 2>/dev/null || true`, { stdio: "ignore", windowsHide: true });
     }
   } catch (e) { /* ignore */ }
 }

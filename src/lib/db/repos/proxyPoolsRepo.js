@@ -4,22 +4,14 @@ import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 
 function rowToPool(row) {
   if (!row) return null;
-  // PG returns lowercase column names; normalize
-  const r = {
-    ...row,
-    isActive: row.isActive ?? row.isactive,
-    testStatus: row.testStatus ?? row.teststatus,
-    createdAt: row.createdAt ?? row.createdat,
-    updatedAt: row.updatedAt ?? row.updatedat,
-  };
-  const extra = parseJson(r.data, {});
+  const extra = parseJson(row.data, {});
   return {
     ...extra,
-    id: r.id,
-    isActive: r.isActive === 1 || r.isActive === true,
-    testStatus: r.testStatus,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
+    id: row.id,
+    isActive: row.isActive === 1 || row.isActive === true,
+    testStatus: row.testStatus,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -54,8 +46,7 @@ export async function getProxyPools(filter = {}) {
   if (filter.isActive !== undefined) { where.push("isActive = ?"); params.push(filter.isActive ? 1 : 0); }
   if (filter.testStatus) { where.push("testStatus = ?"); params.push(filter.testStatus); }
   const sql = `SELECT * FROM proxyPools${where.length ? ` WHERE ${where.join(" AND ")}` : ""}`;
-  const rows = await db.all(sql, params);
-  const list = rows.map(rowToPool);
+  const list = (await db.all(sql, params)).map(rowToPool);
   list.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
   return list;
 }

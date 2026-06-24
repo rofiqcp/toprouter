@@ -41,12 +41,12 @@ const readSettings = async () => {
   try {
     const settingsPath = getClaudeSettingsPath();
     const content = await fs.readFile(settingsPath, "utf-8");
-    return JSON.parse(content);
+    // Tolerate JSONC (trailing commas) and treat unparseable files as "no config"
+    // rather than throwing a 500 that the UI misreads as "tool not installed".
+    const stripped = content.replace(/,(\s*[}\]])/g, "$1");
+    return JSON.parse(stripped);
   } catch (error) {
-    if (error.code === "ENOENT") {
-      return null;
-    }
-    throw error;
+    return null;
   }
 };
 
@@ -64,12 +64,12 @@ export async function GET() {
     }
 
     const settings = await readSettings();
-    const hasTopRouter = !!(settings?.env?.ANTHROPIC_BASE_URL);
+    const has9Router = !!(settings?.env?.ANTHROPIC_BASE_URL);
 
     return NextResponse.json({
       installed: true,
       settings: settings,
-      hasTopRouter: hasTopRouter,
+      has9Router: has9Router,
       settingsPath: getClaudeSettingsPath(),
     });
   } catch (error) {

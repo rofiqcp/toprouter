@@ -47,26 +47,28 @@ const readSettings = async () => {
   try {
     const settingsPath = getOpenClawSettingsPath();
     const content = await fs.readFile(settingsPath, "utf-8");
-    return JSON.parse(content);
+    // Tolerate JSONC (trailing commas) and treat unparseable files as "no config"
+    // rather than throwing a 500 that the UI misreads as "tool not installed".
+    const stripped = content.replace(/,(\s*[}\]])/g, "$1");
+    return JSON.parse(stripped);
   } catch (error) {
-    if (error.code === "ENOENT") return null;
-    throw error;
+    return null;
   }
 };
 
-// Check if settings has TopRouter config
-const hasTopRouterConfig = (settings) => {
+// Check if settings has 9Router config
+const has9RouterConfig = (settings) => {
   if (!settings || !settings.models || !settings.models.providers) return false;
-  return !!settings.models.providers["toprouter"];
+  return !!settings.models.providers["9router"];
 };
 
-// Read per-agent models.json and return current model id (without "toprouter/" prefix)
+// Read per-agent models.json and return current model id (without "9router/" prefix)
 const readAgentModel = async (agentDir) => {
   try {
     const modelsPath = path.join(agentDir, "models.json");
     const content = await fs.readFile(modelsPath, "utf-8");
     const data = JSON.parse(content);
-    const models = data?.providers?.["toprouter"]?.models;
+    const models = data?.providers?.["9router"]?.models;
     return models?.[0]?.id || null;
   } catch {
     return null;
@@ -103,7 +105,7 @@ export async function GET() {
       installed: true,
       settings,
       agents: enrichedAgents,
-      hasTopRouter: hasTopRouterConfig(settings),
+      has9Router: has9RouterConfig(settings),
       settingsPath: getOpenClawSettingsPath(),
     });
   } catch (error) {
@@ -123,7 +125,7 @@ const writeAgentModels = async (agentDir, model, baseUrl, apiKey) => {
   } catch { /* No existing */ }
 
   if (!existing.providers) existing.providers = {};
-  existing.providers["toprouter"] = {
+  existing.providers["9router"] = {
     baseUrl,
     apiKey: apiKey || "your_api_key",
     api: "openai-completions",
@@ -132,7 +134,7 @@ const writeAgentModels = async (agentDir, model, baseUrl, apiKey) => {
   await fs.writeFile(modelsPath, JSON.stringify(existing, null, 2));
 };
 
-// POST - Update TopRouter settings (merge with existing settings)
+// POST - Update 9Router settings (merge with existing settings)
 export async function POST(request) {
   try {
     // agentModels: { [agentId]: modelId } for per-agent override
@@ -161,11 +163,11 @@ export async function POST(request) {
     if (!settings.models.providers) settings.models.providers = {};
 
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
-    const fullModelId = `toprouter/${model}`;
+    const fullModelId = `9router/${model}`;
 
-    // Remove all old toprouter/* entries from agents.defaults.models
+    // Remove all old 9router/* entries from agents.defaults.models
     Object.keys(settings.agents.defaults.models)
-      .filter((k) => k.startsWith("toprouter/"))
+      .filter((k) => k.startsWith("9router/"))
       .forEach((k) => { delete settings.agents.defaults.models[k]; });
 
     // Update default model
@@ -175,16 +177,16 @@ export async function POST(request) {
     const allModelIds = new Set([model]);
     Object.values(agentModels).forEach((m) => { if (m) allModelIds.add(m); });
 
-    // Add fresh toprouter models to allowlist
+    // Add fresh 9router models to allowlist
     allModelIds.forEach((m) => {
-      settings.agents.defaults.models[`toprouter/${m}`] = {};
+      settings.agents.defaults.models[`9router/${m}`] = {};
     });
 
-    // Remove old toprouter model from each agent in agents.list. The
+    // Remove old 9router model from each agent in agents.list. The
     // model field may be a plain string or `{ primary, fallbacks }`.
     if (settings.agents.list) {
       settings.agents.list = settings.agents.list.map((agent) => {
-        if (resolveAgentModel(agent.model).startsWith("toprouter/")) {
+        if (resolveAgentModel(agent.model).startsWith("9router/")) {
           const { model: _, ...rest } = agent;
           return rest;
         }
@@ -192,8 +194,8 @@ export async function POST(request) {
       });
     }
 
-    // Update models.providers.toprouter with all models
-    settings.models.providers["toprouter"] = {
+    // Update models.providers.9router with all models
+    settings.models.providers["9router"] = {
       baseUrl: normalizedBaseUrl,
       apiKey: apiKey || "your_api_key",
       api: "openai-completions",
@@ -204,7 +206,7 @@ export async function POST(request) {
     if (settings.agents.list) {
       settings.agents.list = settings.agents.list.map((agent) => {
         const agentModel = agentModels[agent.id];
-        if (agentModel) return { ...agent, model: `toprouter/${agentModel}` };
+        if (agentModel) return { ...agent, model: `9router/${agentModel}` };
         return agent;
       });
 
@@ -232,7 +234,7 @@ export async function POST(request) {
   }
 }
 
-// DELETE - Remove TopRouter settings only (keep other settings)
+// DELETE - Remove 9Router settings only (keep other settings)
 export async function DELETE() {
   try {
     const settingsPath = getOpenClawSettingsPath();
@@ -252,9 +254,9 @@ export async function DELETE() {
       throw error;
     }
 
-    // Remove TopRouter from models.providers
+    // Remove 9Router from models.providers
     if (settings.models && settings.models.providers) {
-      delete settings.models.providers["toprouter"];
+      delete settings.models.providers["9router"];
       
       // Remove providers object if empty
       if (Object.keys(settings.models.providers).length === 0) {
@@ -262,9 +264,9 @@ export async function DELETE() {
       }
     }
 
-    // Remove toprouter models from agents.defaults.models allowlist
+    // Remove 9router models from agents.defaults.models allowlist
     if (settings.agents?.defaults?.models) {
-      const keysToRemove = Object.keys(settings.agents.defaults.models).filter((k) => k.startsWith("toprouter/"));
+      const keysToRemove = Object.keys(settings.agents.defaults.models).filter((k) => k.startsWith("9router/"));
       for (const key of keysToRemove) {
         delete settings.agents.defaults.models[key];
       }
@@ -273,8 +275,8 @@ export async function DELETE() {
       }
     }
 
-    // Reset agents.defaults.model.primary if it uses toprouter
-    if (settings.agents?.defaults?.model?.primary?.startsWith("toprouter/")) {
+    // Reset agents.defaults.model.primary if it uses 9router
+    if (settings.agents?.defaults?.model?.primary?.startsWith("9router/")) {
       delete settings.agents.defaults.model.primary;
     }
 
@@ -283,7 +285,7 @@ export async function DELETE() {
 
     return NextResponse.json({
       success: true,
-      message: "TopRouter settings removed successfully",
+      message: "9Router settings removed successfully",
     });
   } catch (error) {
     console.log("Error resetting openclaw settings:", error);
