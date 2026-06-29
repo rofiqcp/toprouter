@@ -64,6 +64,27 @@ export default function ComboDetailPage() {
   const [migrateTargets, setMigrateTargets] = useState({}); // { oldPrefix: newPrefix }
   const [migrating, setMigrating] = useState(false);
 
+  // Build set of connected provider prefixes from active connections.
+  // Must be declared before any early return (Rules of Hooks).
+  const connectedPrefixes = useMemo(() => {
+    const prefixes = new Set();
+    connections.forEach((c) => {
+      if (c.isActive !== false && c.provider) {
+        prefixes.add(c.provider);
+        prefixes.add(getProviderAlias(c.provider));
+        if (c.providerSpecificData?.prefix) prefixes.add(c.providerSpecificData.prefix);
+      }
+    });
+    // Also include provider IDs that are in AI_PROVIDERS with noAuth
+    Object.entries(AI_PROVIDERS).forEach(([id, info]) => {
+      if (info.noAuth) {
+        prefixes.add(id);
+        prefixes.add(getProviderAlias(id));
+      }
+    });
+    return prefixes;
+  }, [connections]);
+
   const fetchAll = async () => {
     try {
       const [comboRes, settingsRes, logsRes, keysRes, connsRes, aliasesRes] = await Promise.all([
@@ -263,26 +284,6 @@ export default function ComboDetailPage() {
     providers.map((entry) => parseModelEntry(entry).providerId)
       .filter((pid) => pid && !AI_PROVIDERS[pid])
   )];
-
-  // Build set of connected provider prefixes from active connections
-  const connectedPrefixes = useMemo(() => {
-    const prefixes = new Set();
-    connections.forEach((c) => {
-      if (c.isActive !== false && c.provider) {
-        prefixes.add(c.provider);
-        prefixes.add(getProviderAlias(c.provider));
-        if (c.providerSpecificData?.prefix) prefixes.add(c.providerSpecificData.prefix);
-      }
-    });
-    // Also include provider IDs that are in AI_PROVIDERS with noAuth
-    Object.entries(AI_PROVIDERS).forEach(([id, info]) => {
-      if (info.noAuth) {
-        prefixes.add(id);
-        prefixes.add(getProviderAlias(id));
-      }
-    });
-    return prefixes;
-  }, [connections]);
 
   // Available replacement provider IDs from active connections
   const availableProviders = [...new Set(
