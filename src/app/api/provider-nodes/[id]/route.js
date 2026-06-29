@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { deleteProviderConnectionsByProvider, deleteProviderNode, getProviderConnections, getProviderNodeById, updateProviderConnection, updateProviderNode } from "@/models";
+import { deleteProviderConnectionsByProvider, deleteProviderNode, getProviderConnections, getProviderNodeById, updateProviderConnection, updateProviderNode, getCombos, updateCombo } from "@/models";
 
 // PUT /api/provider-nodes/[id] - Update provider node
 export async function PUT(request, { params }) {
@@ -73,6 +73,30 @@ export async function PUT(request, { params }) {
       })
     )));
 
+    // Update combo model values when prefix changes
+    const oldPrefix = node.prefix;
+    const newPrefix = prefix.trim();
+    if (oldPrefix && newPrefix && oldPrefix !== newPrefix) {
+      try {
+        const combos = await getCombos();
+        const oldPrefixSlash = `${oldPrefix}/`;
+        await Promise.all(combos.map(async (combo) => {
+          if (!Array.isArray(combo.models)) return null;
+          const hasOldPrefix = combo.models.some((m) => typeof m === "string" && (m === oldPrefix || m.startsWith(oldPrefixSlash)));
+          if (!hasOldPrefix) return null;
+          const newModels = combo.models.map((m) => {
+            if (typeof m !== "string") return m;
+            if (m === oldPrefix) return newPrefix;
+            if (m.startsWith(oldPrefixSlash)) return `${newPrefix}/${m.slice(oldPrefixSlash.length)}`;
+            return m;
+          });
+          return updateCombo(combo.id, { models: newModels });
+        }));
+      } catch (err) {
+        console.log("Warning: failed to update combo model prefixes:", err.message);
+      }
+    }
+
     return NextResponse.json({ node: updated });
   } catch (error) {
     console.log("Error updating provider node:", error);
@@ -90,8 +114,31 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: "Provider node not found" }, { status: 404 });
     }
 
+    const deletedPrefix = node.prefix || id;
+
     await deleteProviderConnectionsByProvider(id);
     await deleteProviderNode(id);
+
+    // Check combos for stale model references to the deleted node's prefix
+    try {
+      const combos = await getCombos();
+      const prefixSlash = `${deletedPrefix}/`;
+      const staleCombos = combos.filter((combo) => {
+        if (!Array.isArray(combo.models)) return false;
+        return combo.models.some(
+          (m) => typeof m === "string" && (m === deletedPrefix || m.startsWith(prefixSlash))
+        );
+      });
+
+      if (staleCombos.length > 0) {
+        console.warn(
+          `[STALE COMBO WARNING] Provider node "${id}" (prefix: "${deletedPrefix}") was deleted. ` +
+          `Combos with stale model references: ${staleCombos.map((c) => `${c.name} [${c.models.filter((m) => typeof m === "string" && (m === deletedPrefix || m.startsWith(prefixSlash))).join(", ")}]`).join("; ")}`
+        );
+      }
+    } catch (err) {
+      console.warn("Warning: failed to check combos for stale references:", err.message);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -4,6 +4,9 @@ import {
   getProxyPoolById,
   updateProviderConnection,
   deleteProviderConnection,
+  getProviderConnections,
+  getProviderNodes,
+  getCombos,
 } from "@/models";
 
 function normalizeProxyConfig(body = {}) {
@@ -176,9 +179,53 @@ export async function DELETE(request, { params }) {
   try {
     const { id } = await params;
 
+    const connection = await getProviderConnectionById(id);
+    if (!connection) {
+      return NextResponse.json({ error: "Connection not found" }, { status: 404 });
+    }
+
+    const providerId = connection.provider;
     const deleted = await deleteProviderConnection(id);
     if (!deleted) {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });
+    }
+
+    // Check if this was the last active connection for this provider
+    const remainingConnections = await getProviderConnections({ provider: providerId });
+    const hasActiveConnections = remainingConnections.some((c) => c.isActive);
+
+    if (!hasActiveConnections) {
+      // Determine the prefix used by this provider in combos
+      let prefix = providerId;
+      // For provider nodes, check if there's a custom prefix
+      try {
+        const node = await getProviderNodes();
+        const matchingNode = node.find((n) => n.id === providerId);
+        if (matchingNode && matchingNode.prefix) {
+          prefix = matchingNode.prefix;
+        }
+      } catch {}
+
+      // Check combos for stale model references
+      try {
+        const combos = await getCombos();
+        const prefixSlash = `${prefix}/`;
+        const staleCombos = combos.filter((combo) => {
+          if (!Array.isArray(combo.models)) return false;
+          return combo.models.some(
+            (m) => typeof m === "string" && (m === prefix || m.startsWith(prefixSlash))
+          );
+        });
+
+        if (staleCombos.length > 0) {
+          console.warn(
+            `[STALE COMBO WARNING] Provider "${providerId}" (prefix: "${prefix}") has no active connections. ` +
+            `Combos with stale model references: ${staleCombos.map((c) => `${c.name} [${c.models.filter((m) => typeof m === "string" && (m === prefix || m.startsWith(prefixSlash))).join(", ")}]`).join("; ")}`
+          );
+        }
+      } catch (err) {
+        console.warn("Warning: failed to check combos for stale references:", err.message);
+      }
     }
 
     return NextResponse.json({ message: "Connection deleted successfully" });

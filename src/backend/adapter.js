@@ -39,7 +39,7 @@ export function expressToWebRequest(req, baseUrl) {
     }
   }
 
-  return new Request(url, {
+  return new Request(url, { duplex: "half",
     method: req.method,
     headers,
     body: ["GET", "HEAD"].includes(req.method) ? null : body,

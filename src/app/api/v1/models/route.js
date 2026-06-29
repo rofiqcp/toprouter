@@ -53,6 +53,8 @@ const LLM_KIND = "llm";
 // Models without `type` are treated as LLM.
 const MODEL_TYPE_TO_KIND = {
   image: "image",
+  imageEdit: "imageEdit",
+  video: "video",
   tts: "tts",
   embedding: "embedding",
   stt: "stt",

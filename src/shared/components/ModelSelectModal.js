@@ -378,6 +378,37 @@ export default function ModelSelectModal({
     return [...added, ...rest];
   };
 
+  // Build a Set of all connected prefixes (provider IDs, aliases, node prefixes)
+  const connectedPrefixes = useMemo(() => {
+    const prefixes = new Set();
+    // Active provider connections
+    activeProviders.forEach(p => {
+      prefixes.add(p.provider);
+      prefixes.add(getProviderAlias(p.provider));
+      if (p.providerSpecificData?.prefix) prefixes.add(p.providerSpecificData.prefix);
+    });
+    // Provider nodes (custom providers)
+    providerNodes.forEach(n => {
+      prefixes.add(n.id);
+      if (n.prefix) prefixes.add(n.prefix);
+    });
+    // No-auth providers (always available)
+    NO_AUTH_PROVIDER_IDS.forEach(id => {
+      prefixes.add(id);
+      prefixes.add(getProviderAlias(id));
+    });
+    return prefixes;
+  }, [activeProviders, providerNodes]);
+
+  // Check if a model value's prefix has an active connection
+  const isModelStale = (modelValue) => {
+    if (!modelValue || typeof modelValue !== "string") return false;
+    // Combos don't have prefixes — always valid
+    if (!modelValue.includes("/")) return false;
+    const prefix = modelValue.split("/")[0];
+    return !connectedPrefixes.has(prefix);
+  };
+
   // Filter models by search query
   const filteredGroups = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -394,6 +425,11 @@ export default function ModelSelectModal({
         );
         if (models.length === 0 && !providerNameMatches) return;
       }
+      // Tag stale added models
+      models = models.map(m => ({
+        ...m,
+        isStale: isModelStale(m.value) && addedModelValues.includes(m.value),
+      }));
       filtered[providerId] = {
         ...group,
         models: sortModels(models),
@@ -401,7 +437,22 @@ export default function ModelSelectModal({
     });
 
     return filtered;
-  }, [groupedModels, searchQuery, addedModelValues]);
+  }, [groupedModels, searchQuery, addedModelValues, connectedPrefixes]);
+
+  // Stale added models: in addedModelValues but not visible in any group (provider disconnected)
+  const staleModels = useMemo(() => {
+    const allVisibleValues = new Set();
+    Object.values(filteredGroups).forEach(g => g.models.forEach(m => allVisibleValues.add(m.value)));
+    return addedModelValues
+      .filter(v => !allVisibleValues.has(v) && isModelStale(v))
+      .map(v => ({
+        id: v,
+        name: v,
+        value: v,
+        prefix: v.includes("/") ? v.split("/")[0] : "",
+        isStale: true,
+      }));
+  }, [addedModelValues, filteredGroups, connectedPrefixes]);
 
   const handleSelect = (model) => {
     const value = model?.value || model?.name || model;
@@ -491,6 +542,33 @@ export default function ModelSelectModal({
           </div>
         )}
 
+        {/* Stale/disconnected models section */}
+        {staleModels.length > 0 && (
+          <div>
+            <div className="flex items-center gap-1.5 mb-1.5 sticky top-0 bg-surface py-0.5">
+              <span className="material-symbols-outlined text-amber-500 text-[14px]">warning</span>
+              <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Disconnected</span>
+              <span className="text-[10px] text-text-muted">({staleModels.length})</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {staleModels.map((model) => (
+                <button
+                  key={model.value}
+                  onClick={() => handleSelect(model)}
+                  title="Provider connection removed — no active connection"
+                  className="px-2 py-1 rounded-xl text-xs font-medium transition-all border hover:cursor-pointer border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+                >
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined leading-none text-amber-500" style={{ fontSize: "11px" }}>warning</span>
+                    {model.name}
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200/60 dark:bg-amber-800/40 text-amber-700 dark:text-amber-300 font-normal">disconnected</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Provider models */}
         {Object.entries(filteredGroups).map(([providerId, group]) => (
           <div key={providerId}>
@@ -515,26 +593,32 @@ export default function ModelSelectModal({
               {group.models.map((model) => {
                 const isSelected = selectedModel === model.value;
                 const isPlaceholder = model.isPlaceholder;
+                const isStale = model.isStale;
                 return (
                   <button
                     key={model.value}
                     onClick={() => handleSelect(model)}
-                    title={isPlaceholder ? "Select to pre-fill, then edit model ID in the input" : undefined}
+                    title={isPlaceholder ? "Select to pre-fill, then edit model ID in the input" : (isStale ? "Provider disconnected — no active connection" : undefined)}
                     className={`
                       px-2 py-1 rounded-xl text-xs font-medium transition-all border hover:cursor-pointer
                       ${isPlaceholder
                         ? "border-dashed border-border text-text-muted hover:border-primary/50 hover:text-primary bg-surface italic"
-                        : isSelected
-                          ? "bg-primary text-white border-primary"
-                          : addedModelValues.includes(model.value)
-                            ? "bg-primary border-primary text-white hover:bg-primary-hover"
-                            : "bg-surface border-border text-text-main hover:border-primary/50 hover:bg-primary/5"
+                        : isStale
+                          ? "border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+                          : isSelected
+                            ? "bg-primary text-white border-primary"
+                            : addedModelValues.includes(model.value)
+                              ? "bg-primary border-primary text-white hover:bg-primary-hover"
+                              : "bg-surface border-border text-text-main hover:border-primary/50 hover:bg-primary/5"
                       }
                     `}
                   >
                     <span className="flex items-center gap-1">
-                      {addedModelValues.includes(model.value) && !isPlaceholder && (
+                      {addedModelValues.includes(model.value) && !isPlaceholder && !isStale && (
                         <span className="material-symbols-outlined leading-none" style={{ fontSize: "10px" }}>check</span>
+                      )}
+                      {isStale && (
+                        <span className="material-symbols-outlined leading-none text-amber-500" style={{ fontSize: "11px" }}>warning</span>
                       )}
                       {isPlaceholder ? (
                         <>
@@ -547,11 +631,16 @@ export default function ModelSelectModal({
                           <span className="text-[9px] opacity-60 font-normal">custom</span>
                           <CapacityBadges caps={getCaps(model.value)} />
                         </>
+                      ) : isStale ? (
+                        <>{model.name}</>
                       ) : (
                         <>
                           {model.name}
                           <CapacityBadges caps={getCaps(model.value)} />
                         </>
+                      )}
+                      {isStale && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200/60 dark:bg-amber-800/40 text-amber-700 dark:text-amber-300 font-normal">disconnected</span>
                       )}
                     </span>
                   </button>

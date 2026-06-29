@@ -8,7 +8,7 @@ import {
   isValidApiKey,
 } from "../services/auth.js";
 import { cacheClaudeHeaders } from "open-sse/utils/claudeHeaderCache.js";
-import { getSettings } from "@/lib/localDb";
+import { getSettings, getCombos } from "@/lib/localDb";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
@@ -216,8 +216,25 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
       }
       if (excludeConnectionIds.size === 0) {
-        log.warn("AUTH", `No active credentials for provider: ${provider}`);
-        return errorResponse(HTTP_STATUS.NOT_FOUND, `No active credentials for provider: ${provider}`);
+        // Build actionable error: find combos that reference this provider
+        let comboRefs = [];
+        try {
+          const combos = await getCombos();
+          comboRefs = combos
+            .filter((c) => c.models?.some((m) => m.startsWith(`${provider}/`)))
+            .map((c) => c.name);
+        } catch { /* ignore - don't fail the error path */ }
+
+        const baseMsg = `No active credentials for provider '${provider}' (no connected accounts)`;
+        let detailMsg;
+        if (comboRefs.length > 0) {
+          const comboList = comboRefs.map((n) => `"${n}"`).join(", ");
+          detailMsg = `${baseMsg}. These combos reference it: ${comboList}. Update the combo to use a different provider prefix, or add a connection for '${provider}'.`;
+        } else {
+          detailMsg = `${baseMsg}. Add a connection for this provider, or update any combos/aliases that reference it to use a connected provider.`;
+        }
+        log.warn("AUTH", detailMsg);
+        return errorResponse(HTTP_STATUS.NOT_FOUND, detailMsg);
       }
       log.warn("CHAT", "No more accounts available", { provider });
       return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");

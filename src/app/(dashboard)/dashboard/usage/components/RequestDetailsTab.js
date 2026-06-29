@@ -35,20 +35,26 @@ async function fetchProviderNames() {
 
 function getProviderName(providerId, cache) {
   if (!providerId) return providerId;
-  if (!cache) return providerId;
-
-  const cached = cache[providerId];
-
-  if (typeof cached === 'string') {
-    return cached;
+  
+  // Try cache first (custom provider nodes)
+  if (cache) {
+    const cached = cache[providerId];
+    if (typeof cached === 'string') {
+      return cached;
+    }
+    if (cached?.name) {
+      return cached.name;
+    }
   }
 
-  if (cached?.name) {
-    return cached.name;
-  }
-
+  // Fallback to AI_PROVIDERS constant (built-in providers)
   const providerConfig = getProviderByAlias(providerId) || AI_PROVIDERS[providerId];
-  return providerConfig?.name || providerId;
+  if (providerConfig?.name) {
+    return providerConfig.name;
+  }
+  
+  // Last resort: return raw ID
+  return providerId;
 }
 
 function CollapsibleSection({ title, children, defaultOpen = false, icon = null }) {

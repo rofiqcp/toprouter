@@ -150,6 +150,28 @@ app.post("/v1/images/edits", wrapHandler(handleImageEdit));
 // Video — generation
 app.post("/v1/video/generations", wrapHandler(handleVideoGeneration));
 
+// Tasks — async polling (alibaba-media video generation)
+app.get("/v1/tasks/:taskId", wrapHandler(async (request) => {
+  try {
+    const url = new URL(request.url);
+    const taskId = url.pathname.split('/').pop();
+    if (!taskId) return new Response(JSON.stringify({ error: 'Missing taskId' }), { status: 400 });
+
+    // Import pollAsyncTask (lazy import to avoid circular deps)
+    const { pollAsyncTask } = await import('open-sse/handlers/imageProviders/alibabaMedia.js');
+    const result = await pollAsyncTask(taskId);
+
+    if (result.error) {
+      return new Response(JSON.stringify({ error: result.error }), { status: 400 });
+    }
+
+    return new Response(JSON.stringify(result), { status: 200 });
+  } catch (err) {
+    console.error('[tasks] polling error:', err);
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+  }
+}));
+
 // Models — list (OpenAI compatible)
 app.get("/v1/models", wrapHandler(async (request) => {
   // Inline — same logic as Next.js models route

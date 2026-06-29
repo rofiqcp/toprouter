@@ -1,11 +1,11 @@
 "use client";
 
 import { useParams, notFound, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { Card, Button, Input, Toggle, ModelSelectModal } from "@/shared/components";
+import { Card, Button, Input, Toggle, Select, ModelSelectModal } from "@/shared/components";
 import ProviderIcon from "@/shared/components/ProviderIcon";
-import { AI_PROVIDERS, MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
+import { AI_PROVIDERS, MEDIA_PROVIDER_KINDS, getProviderAlias } from "@/shared/constants/providers";
 
 // Parse "providerId/model" or just "providerId" → { providerId, model }
 function parseModelEntry(entry) {
@@ -61,6 +61,8 @@ export default function ComboDetailPage() {
   const [apiKey, setApiKey] = useState("");
   const [connections, setConnections] = useState([]);
   const [modelAliases, setModelAliases] = useState({});
+  const [migrateTargets, setMigrateTargets] = useState({}); // { oldPrefix: newPrefix }
+  const [migrating, setMigrating] = useState(false);
 
   const fetchAll = async () => {
     try {
@@ -147,6 +149,23 @@ export default function ComboDetailPage() {
     [next[idx], next[swap]] = [next[swap], next[idx]];
     setProviders(next);
     await saveCombo({ models: next });
+  };
+
+  // Migrate stale prefixes: replace old prefix with new one in all models
+  const handleMigratePrefixes = async () => {
+    const entries = Object.entries(migrateTargets).filter(([, to]) => to);
+    if (entries.length === 0) return;
+    setMigrating(true);
+    const next = providers.map((entry) => {
+      const { providerId, model } = parseModelEntry(entry);
+      const target = migrateTargets[providerId];
+      if (target) return model ? `${target}/${model}` : target;
+      return entry;
+    });
+    setProviders(next);
+    await saveCombo({ models: next });
+    setMigrateTargets({});
+    setMigrating(false);
   };
 
   const handleToggleRoundRobin = async (enabled) => {
@@ -239,6 +258,42 @@ export default function ComboDetailPage() {
     : "";
   const backHref = getListingHref(combo.kind);
 
+  // Compute stale prefixes in combo models (providerId not found in AI_PROVIDERS)
+  const stalePrefixes = [...new Set(
+    providers.map((entry) => parseModelEntry(entry).providerId)
+      .filter((pid) => pid && !AI_PROVIDERS[pid])
+  )];
+
+  // Build set of connected provider prefixes from active connections
+  const connectedPrefixes = useMemo(() => {
+    const prefixes = new Set();
+    connections.forEach((c) => {
+      if (c.isActive !== false && c.provider) {
+        prefixes.add(c.provider);
+        prefixes.add(getProviderAlias(c.provider));
+        if (c.providerSpecificData?.prefix) prefixes.add(c.providerSpecificData.prefix);
+      }
+    });
+    // Also include provider IDs that are in AI_PROVIDERS with noAuth
+    Object.entries(AI_PROVIDERS).forEach(([id, info]) => {
+      if (info.noAuth) {
+        prefixes.add(id);
+        prefixes.add(getProviderAlias(id));
+      }
+    });
+    return prefixes;
+  }, [connections]);
+
+  // Available replacement provider IDs from active connections
+  const availableProviders = [...new Set(
+    connections
+      .filter((c) => c.isActive !== false && c.provider)
+      .map((c) => c.provider)
+  )].filter((pid) => AI_PROVIDERS[pid]);
+
+  const hasMigrations = stalePrefixes.length > 0 && availableProviders.length > 0;
+  const canMigrate = hasMigrations && Object.values(migrateTargets).some(Boolean);
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -287,6 +342,43 @@ export default function ComboDetailPage() {
           </div>
           <Button size="sm" icon="add" onClick={() => setShowPicker(true)}>Add Provider</Button>
         </div>
+
+        {/* Migrate Prefixes Section */}
+        {hasMigrations && (
+          <div className="mb-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[18px]">warning_amber</span>
+              <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Migrate Prefix</span>
+              <span className="text-xs text-amber-600 dark:text-amber-400">({stalePrefixes.length} stale prefix{stalePrefixes.length > 1 ? "es" : ""} detected)</span>
+            </div>
+            {stalePrefixes.map((oldPrefix) => (
+              <div key={oldPrefix} className="flex flex-wrap items-center gap-2">
+                <code className="text-xs font-mono px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{oldPrefix}</code>
+                <span className="material-symbols-outlined text-[14px] text-text-muted">arrow_forward</span>
+                <div className="flex-1 min-w-[150px]">
+                  <Select
+                    value={migrateTargets[oldPrefix] || ""}
+                    onChange={(e) => setMigrateTargets({ ...migrateTargets, [oldPrefix]: e.target.value })}
+                    options={availableProviders.map((pid) => ({
+                      value: pid,
+                      label: `${AI_PROVIDERS[pid]?.name || pid} (${pid})`,
+                    }))}
+                    placeholder="Select replacement..."
+                  />
+                </div>
+              </div>
+            ))}
+            <Button
+              size="sm"
+              icon="sync"
+              onClick={handleMigratePrefixes}
+              disabled={!canMigrate || migrating}
+              className="self-start"
+            >
+              {migrating ? "Migrating..." : `Migrate ${Object.values(migrateTargets).filter(Boolean).length} prefix${Object.values(migrateTargets).filter(Boolean).length !== 1 ? "es" : ""}`}
+            </Button>
+          </div>
+        )}
         {providers.length === 0 ? (
           <div className="text-center py-6 border border-dashed border-border rounded-lg text-text-muted text-sm">
             No providers yet.
@@ -296,20 +388,25 @@ export default function ComboDetailPage() {
             {providers.map((entry, idx) => {
               const { providerId, model } = parseModelEntry(entry);
               const p = AI_PROVIDERS[providerId];
+              const isStale = !connectedPrefixes.has(providerId);
               return (
-                <div key={`${entry}-${idx}`} className="flex items-center gap-3 p-2 rounded-lg bg-black/[0.02] dark:bg-white/[0.02]">
+                <div key={`${entry}-${idx}`} className={`flex items-center gap-3 p-2 rounded-lg ${isStale ? "bg-amber-50 dark:bg-amber-900/10 border border-amber-300 dark:border-amber-700" : "bg-black/[0.02] dark:bg-white/[0.02]"}`}>
                   <span className="text-xs text-text-muted w-5 text-center">{idx + 1}</span>
+                  {isStale && (
+                    <span className="material-symbols-outlined text-amber-500 shrink-0" style={{ fontSize: "14px" }}>warning</span>
+                  )}
                   <ProviderIcon
                     src={`/providers/${providerId}.png`}
                     alt={p?.name || providerId}
                     size={24}
-                    className="object-contain rounded shrink-0"
+                    className={`object-contain rounded shrink-0 ${isStale ? "opacity-50" : ""}`}
                     fallbackText={p?.textIcon || providerId.slice(0, 2).toUpperCase()}
                     fallbackColor={p?.color}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium truncate">{p?.name || providerId}</div>
+                    <div className={`text-sm font-medium truncate ${isStale ? "text-amber-700 dark:text-amber-300" : ""}`}>{p?.name || providerId}</div>
                     {model && <code className="text-[10px] text-text-muted font-mono truncate block">{model}</code>}
+                    {isStale && <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200/60 dark:bg-amber-800/40 text-amber-700 dark:text-amber-300 font-normal">Provider disconnected — no active connection</span>}
                   </div>
                   <div className="flex items-center gap-0.5">
                     <button onClick={() => handleMove(idx, -1)} disabled={idx === 0} className={`p-1 rounded ${idx === 0 ? "text-text-muted/20" : "text-text-muted hover:text-primary hover:bg-black/5"}`} title="Move up">
