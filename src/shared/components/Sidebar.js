@@ -236,18 +236,17 @@ export default function Sidebar({ onClose }) {
                   </Link>
                 ))}
                 <Link
-                  key={COMBINED_WEB_ITEM.id}
-                  href={COMBINED_WEB_ITEM.href}
+                  href="/dashboard/media-providers/web"
                   onClick={onClose}
                   className={cn(
                     "flex items-center gap-3 px-4 py-1 rounded-lg transition-all group",
-                    pathname.startsWith(COMBINED_WEB_ITEM.href)
+                    pathname.startsWith("/dashboard/media-providers/web")
                       ? "bg-primary/10 text-primary"
                       : "text-text-muted hover:bg-surface-2 hover:text-text-main"
                   )}
                 >
-                  <span className="material-symbols-outlined text-[16px]">{COMBINED_WEB_ITEM.icon}</span>
-                  <span className="text-sm">{COMBINED_WEB_ITEM.label}</span>
+                  <span className="material-symbols-outlined text-[16px]">language</span>
+                  <span className="text-sm">Web Fetch & Search</span>
                 </Link>
               </div>
             )}
@@ -403,13 +402,11 @@ function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdow
           <span className="material-symbols-outlined text-[24px]">content_copy</span>
         </div>
         <div>
-          <h2 className="text-lg font-semibold">Update 9Router{latestVersion ? ` to v${latestVersion}` : ""}</h2>
-          <p className="text-xs text-white/60">
-            {isDisconnected
-              ? "Server stopped. Paste the command into a terminal to install."
-              : isCountingDown
-                ? `Command copied. Server will stop in ${countdown}s...`
-                : "Click the button below to copy the install command and shutdown."}
+          <h2 className="text-lg font-semibold">Update TopRouter</h2>
+          <p className="text-xs text-text-muted">
+            {isCountingDown
+              ? `Command copied. Server will stop in ${countdown}s...`
+              : "Click the button below to copy the install command and shutdown."}
           </p>
         </div>
       </div>
@@ -422,7 +419,7 @@ function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdow
       <ol className="text-xs text-white/70 space-y-1 list-decimal list-inside mb-4">
         <li>Click <strong>Copy & Shutdown</strong> below.</li>
         <li>Paste the command into your terminal and press Enter.</li>
-        <li>Run <code className="px-1 rounded bg-white/10 text-green-400">9router</code> again after install.</li>
+        <li>Run <code className="px-1 rounded bg-white/10 text-green-400">toprouter</code> again after install.</li>
       </ol>
 
       {isDisconnected ? (

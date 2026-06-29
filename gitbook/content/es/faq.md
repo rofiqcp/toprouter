@@ -1,12 +1,12 @@
 # Preguntas frecuentes
 
-Preguntas comunes sobre 9Router.
+Preguntas comunes sobre TopRouter.
 
 ---
 
-## ¿Qué es 9Router?
+## ¿Qué es TopRouter?
 
-**9Router es un router de modelos de IA que maximiza el valor de tu suscripción y minimiza los costos.**
+**TopRouter es un router de modelos de IA que maximiza el valor de tu suscripción y minimiza los costos.**
 
 Enruta inteligentemente las solicitudes a través de múltiples proveedores de IA usando un sistema de fallback de 3 niveles:
 1. **Nivel de suscripción** - Maximiza las cuotas de Claude Code, Codex, Gemini que ya pagas
@@ -23,7 +23,7 @@ Enruta inteligentemente las solicitudes a través de múltiples proveedores de I
 
 ## ¿Cómo funciona el precio?
 
-**9Router usa una estrategia de precios de 3 niveles:**
+**TopRouter usa una estrategia de precios de 3 niveles:**
 
 ### Nivel 1: Suscripción (Maximiza primero)
 - **Claude Code** (Pro/Max): $20-100/mes - Cuota de 5 horas + semanal
@@ -50,9 +50,9 @@ Enruta inteligentemente las solicitudes a través de múltiples proveedores de I
 
 ---
 
-## ¿9Router es gratis?
+## ¿TopRouter es gratis?
 
-**Sí, 9Router en sí es 100% gratis y open source.**
+**Sí, TopRouter en sí es 100% gratis y open source.**
 
 **Proveedores de nivel gratis disponibles:**
 - **Gemini CLI** - 180K completados/mes (cuenta Google GRATIS)
@@ -96,7 +96,7 @@ Consulta la [documentación de proveedores](providers/subscription.md) para más
 
 ## ¿Puedo usar múltiples proveedores?
 
-**¡Sí! Esta es la característica principal de 9Router.**
+**¡Sí! Esta es la característica principal de TopRouter.**
 
 **Los combos te permiten encadenar múltiples proveedores con fallback automático:**
 
@@ -129,7 +129,7 @@ Consulta la [documentación de combos](features/combos.md) para ejemplos.
 
 ## ¿Cómo funciona el seguimiento de cuota?
 
-**9Router rastrea la cuota en tiempo real para todos los proveedores:**
+**TopRouter rastrea la cuota en tiempo real para todos los proveedores:**
 
 **Características:**
 - **Consumo de tokens** - Tokens de entrada/salida por solicitud
@@ -154,17 +154,17 @@ Consulta la [documentación de seguimiento de cuota](features/quota-tracking.md)
 
 ---
 
-## ¿9Router funciona con Cursor?
+## ¿TopRouter funciona con Cursor?
 
 **Sí, pero Cursor requiere un endpoint en la nube.**
 
 **Problema:** Cursor IDE no soporta endpoints en localhost.
 
-**Solución:** Usa el despliegue en la nube de 9Router:
+**Solución:** Usa el despliegue en la nube de TopRouter:
 
 ```
 Cursor Settings → Models → Advanced:
-  OpenAI API Base URL: https://9router.com/v1
+  OpenAI API Base URL: https://toprouter.com/v1
   OpenAI API Key: [desde el dashboard]
   Model: cc/claude-opus-4-5-20251101
 ```
@@ -172,8 +172,8 @@ Cursor Settings → Models → Advanced:
 **Alternativa:** Auto-hospéda en VPS con dominio público:
 ```bash
 # Despliega en VPS
-git clone https://github.com/decolua/9router.git
-cd 9router/app
+git clone https://github.com/decolua/toprouter.git
+cd toprouter/app
 npm install && npm run build
 npm start
 
@@ -192,22 +192,22 @@ Consulta la [guía de integración de Cursor](integration/cursor.md) para detall
 
 ---
 
-## ¿Puedo auto-hospedar 9Router?
+## ¿Puedo auto-hospedar TopRouter?
 
-**¡Sí! 9Router soporta múltiples opciones de despliegue:**
+**¡Sí! TopRouter soporta múltiples opciones de despliegue:**
 
 ### Localhost (Por defecto)
 ```bash
-npm install -g 9router
-9router
+npm install -g toprouter
+toprouter
 → Dashboard: http://localhost:3000
 → API: http://localhost:20128/v1
 ```
 
 ### VPS/Cloud
 ```bash
-git clone https://github.com/decolua/9router.git
-cd 9router/app
+git clone https://github.com/decolua/toprouter.git
+cd toprouter/app
 npm install && npm run build
 
 export JWT_SECRET="your-secure-secret"
@@ -219,23 +219,23 @@ npm start
 
 ### Docker
 ```bash
-docker build -t 9router .
+docker build -t toprouter .
 docker run -d \
   -p 3000:3000 \
   -e JWT_SECRET="your-secret" \
-  -v 9router-data:/app/data \
-  9router
+  -v toprouter-data:/app/data \
+  toprouter
 ```
 
 ### Cloudflare Workers
 ```bash
-cd 9router/app
+cd toprouter/app
 npm run deploy:cloudflare
 ```
 
 **Variables de entorno:**
 - `JWT_SECRET` - **¡DEBE cambiarse en producción!**
-- `DATA_DIR` - Ruta de almacenamiento de la base de datos (por defecto: `~/.9router`)
+- `DATA_DIR` - Ruta de almacenamiento de la base de datos (por defecto: `~/.toprouter`)
 - `INITIAL_PASSWORD` - Login del dashboard (por defecto: `123456`)
 - `NODE_ENV` - Establece en `production` para desplegar
 
@@ -245,11 +245,11 @@ Consulta la [guía de despliegue](getting-started/installation.md#deployment) pa
 
 ## ¿Mis datos están seguros?
 
-**Sí, 9Router prioriza la seguridad y privacidad:**
+**Sí, TopRouter prioriza la seguridad y privacidad:**
 
 **Almacenamiento local:**
-- Todos los datos se almacenan localmente en `~/.9router` (o `DATA_DIR` personalizado)
-- No se envían datos a los servidores de 9Router
+- Todos los datos se almacenan localmente en `~/.toprouter` (o `DATA_DIR` personalizado)
+- No se envían datos a los servidores de TopRouter
 - Tokens OAuth cifrados con JWT
 
 **Sin telemetría:**
@@ -268,31 +268,31 @@ Consulta la [guía de despliegue](getting-started/installation.md#deployment) pa
 - Habilita HTTPS para despliegues en la nube
 - Rota las API keys regularmente
 
-**Lo que 9Router almacena:**
+**Lo que TopRouter almacena:**
 - Tokens OAuth de proveedores (cifrados)
 - API keys (cifradas)
 - Estadísticas de uso (solo locales)
 - Configuraciones de combos
 
-**Lo que 9Router NO almacena:**
+**Lo que TopRouter NO almacena:**
 - Tus prompts o respuestas
 - El código que generas
 - Información personal
 
 ---
 
-## ¿Cómo actualizo 9Router?
+## ¿Cómo actualizo TopRouter?
 
 **Los métodos de actualización dependen del tipo de instalación:**
 
 ### Instalación global NPM
 ```bash
-npm update -g 9router
+npm update -g toprouter
 ```
 
 ### Instalación local
 ```bash
-cd 9router/app
+cd toprouter/app
 git pull origin main
 npm install
 npm run build
@@ -301,23 +301,23 @@ npm start
 
 ### Docker
 ```bash
-docker pull 9router:latest
-docker stop 9router
-docker rm 9router
+docker pull toprouter:latest
+docker stop toprouter
+docker rm toprouter
 docker run -d \
   -p 3000:3000 \
-  -v 9router-data:/app/data \
-  9router:latest
+  -v toprouter-data:/app/data \
+  toprouter:latest
 ```
 
 **Verificar versión:**
 ```bash
-9router --version
+toprouter --version
 ```
 
 **Cambios disruptivos:**
-- Revisa [CHANGELOG.md](https://github.com/decolua/9router/blob/main/CHANGELOG.md)
-- Respalda `~/.9router` antes de actualizaciones mayores
+- Revisa [CHANGELOG.md](https://github.com/decolua/toprouter/blob/main/CHANGELOG.md)
+- Respalda `~/.toprouter` antes de actualizaciones mayores
 - Revisa las guías de migración para versiones mayores
 
 ---
@@ -329,18 +329,18 @@ docker run -d \
 ### Formas de contribuir:
 
 1. **Reportar bugs:**
-   - [GitHub Issues](https://github.com/decolua/9router/issues)
+   - [GitHub Issues](https://github.com/decolua/toprouter/issues)
    - Incluye logs de error, pasos para reproducir
 
 2. **Solicitar características:**
-   - [GitHub Discussions](https://github.com/decolua/9router/discussions)
+   - [GitHub Discussions](https://github.com/decolua/toprouter/discussions)
    - Describe el caso de uso y los beneficios
 
 3. **Enviar código:**
    ```bash
    # Fork del repo
-   git clone https://github.com/YOUR_USERNAME/9router.git
-   cd 9router
+   git clone https://github.com/YOUR_USERNAME/toprouter.git
+   cd toprouter
    
    # Crea una rama
    git checkout -b feature/your-feature
@@ -375,13 +375,13 @@ docker run -d \
 - Actualiza la documentación
 - Mantén los commits atómicos y descriptivos
 
-Consulta [CONTRIBUTING.md](https://github.com/decolua/9router/blob/main/CONTRIBUTING.md) para detalles.
+Consulta [CONTRIBUTING.md](https://github.com/decolua/toprouter/blob/main/CONTRIBUTING.md) para detalles.
 
 ---
 
 ## ¿Necesitas más ayuda?
 
-- **Documentación:** [9router.com/docs](https://9router.com/docs)
-- **GitHub:** [github.com/decolua/9router](https://github.com/decolua/9router)
-- **Issues:** [github.com/decolua/9router/issues](https://github.com/decolua/9router/issues)
+- **Documentación:** [toprouter.com/docs](https://toprouter.com/docs)
+- **GitHub:** [github.com/decolua/toprouter](https://github.com/decolua/toprouter)
+- **Issues:** [github.com/decolua/toprouter/issues](https://github.com/decolua/toprouter/issues)
 - **Troubleshooting:** [troubleshooting.md](troubleshooting.md)

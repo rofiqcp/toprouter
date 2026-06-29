@@ -1,16 +1,16 @@
 {
   "name": "toprouter-app",
-  "version": "0.5.8",
+  "version": "0.5.12",
   "description": "TopRouter web dashboard",
   "private": true,
-  "scripts": {
-    "dev": "next dev --webpack --port 20129",
-    "build": "next build --webpack && ln -sfn ../../static .next/standalone/.next/static && ln -sfn ../public .next/standalone/public",
-    "start": "next start",
-    "dev:bun": "bun --bun next dev --webpack --port 20129",
-    "build:bun": "bun --bun next build --webpack",
-    "start:bun": "bun ./.next/standalone/server.js"
-  },
+"scripts": {
+  "dev": "next dev --webpack --port 20128",
+  "build": "next build --webpack && node scripts/post-build.js",
+  "start": "next start",
+  "dev:bun": "bun --bun next dev --webpack --port 20128",
+  "build:bun": "bun --bun next build --webpack",
+  "start:bun": "bun ./.next/standalone/server.js"
+},
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^9.0.0",
@@ -30,8 +30,8 @@
     "jose": "^6.1.3",
     "marked": "^18.0.1",
     "material-symbols": "^0.44.6",
-    "monaco-editor": "^0.53.0",
-    "next": "^16.2.9",
+    "monaco-editor": "^0.55.1",
+    "next": "^16.1.6",
     "node-forge": "^1.3.3",
     "node-machine-id": "^1.1.12",
     "open": "^11.0.0",

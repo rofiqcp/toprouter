@@ -145,13 +145,11 @@ export default function ProvidersPage() {
     });
 
   useEffect(() => {
-    const controller = new AbortController();
-    const signal = controller.signal;
     const fetchData = async () => {
       try {
         const [connectionsRes, nodesRes] = await Promise.all([
-          fetch("/api/providers", { signal }),
-          fetch("/api/provider-nodes", { signal }),
+          fetch("/api/providers"),
+          fetch("/api/provider-nodes"),
         ]);
         const connectionsData = await connectionsRes.json();
         const nodesData = await nodesRes.json();
@@ -159,13 +157,12 @@ export default function ProvidersPage() {
           setConnections(connectionsData.connections || []);
         if (nodesRes.ok) setProviderNodes(nodesData.nodes || []);
       } catch (error) {
-        if (error.name !== "AbortError") console.warn("[Providers] Error fetching data:", error.message);
+        console.log("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-    return () => controller.abort();
   }, []);
 
   const getProviderStats = (providerId, authType) => {

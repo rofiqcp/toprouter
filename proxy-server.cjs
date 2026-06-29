@@ -1,7 +1,7 @@
 const { createServer } = require('http');
 const { request } = require('http');
 
-const MAIN_PORT = 20129;
+const MAIN_PORT = 20128;
 const STATIC_PORT = 20130;
 const PROXY_PORT = 20131;
 

@@ -16,7 +16,25 @@ function sanitizeFunctionName(name) {
 }
 
 const MAX_RETRY_AFTER_MS = 10000;
+const ANTIGRAVITY_TRANSIENT_RETRY_MAX_MS = 15000;
 const MAX_ANTIGRAVITY_OUTPUT_TOKENS = 16384;
+
+const ANTIGRAVITY_TRANSIENT_ERROR_PATTERNS = [
+  /high\s+traffic/i,
+  /agent\s+(execution\s+)?terminated\s+due\s+to\s+error/i,
+  /capacity/i,
+  /temporarily\s+unavailable/i,
+  /timeout/i,
+  /stream\s+(ended|closed|terminated|interrupted)/i,
+  /empty\s+response/i,
+];
+
+const ANTIGRAVITY_TRANSIENT_STATUSES = new Set([
+  HTTP_STATUS.SERVER_ERROR,
+  HTTP_STATUS.BAD_GATEWAY,
+  HTTP_STATUS.SERVICE_UNAVAILABLE,
+  HTTP_STATUS.GATEWAY_TIMEOUT,
+]);
 
 // Fields Google generateContent rejects (Claude/OpenAI/Qwen thinking fields set at body root by thinkingUnified.js)
 const ANTIGRAVITY_REQUEST_BLACKLIST = [
@@ -289,40 +307,66 @@ export class AntigravityExecutor extends BaseExecutor {
     return null;
   }
 
-  // Parse retry time from Antigravity error message body
-  // Format: "Your quota will reset after 2h7m23s" or "1h30m" or "45m" or "30s"
-  parseRetryFromErrorMessage(errorMessage) {
-    if (!errorMessage || typeof errorMessage !== "string") return null;
+   // Parse retry time from Antigravity error message body
+   // Format: "Your quota will reset after 2h7m23s" or "1h30m" or "45m" or "30s"
+   parseRetryFromErrorMessage(errorMessage) {
+     if (!errorMessage || typeof errorMessage !== "string") return null;
 
-    const match = errorMessage.match(/reset after (\d+h)?(\d+m)?(\d+s)?/i);
-    if (!match) return null;
+     const match = errorMessage.match(/reset after (\d+h)?(\d+m)?(\d+s)?/i);
+     if (!match) return null;
 
-    let totalMs = 0;
-    if (match[1]) totalMs += parseInt(match[1]) * 3600 * 1000; // hours
-    if (match[2]) totalMs += parseInt(match[2]) * 60 * 1000; // minutes
-    if (match[3]) totalMs += parseInt(match[3]) * 1000; // seconds
+     let totalMs = 0;
+     if (match[1]) totalMs += parseInt(match[1]) * 3600 * 1000; // hours
+     if (match[2]) totalMs += parseInt(match[2]) * 60 * 1000; // minutes
+     if (match[3]) totalMs += parseInt(match[3]) * 1000; // seconds
 
-    return totalMs > 0 ? totalMs : null;
-  }
+     return totalMs > 0 ? totalMs : null;
+   }
 
-  // Hook called by BaseExecutor.tryRetry: derive delay from Retry-After (header → body),
-  // cap at MAX_RETRY_AFTER_MS, else exponential backoff for 429. Return false to veto (fallback URL).
-  async computeRetryDelay(response, attempt) {
-    let retryMs = this.parseRetryHeaders(response.headers);
-    if (!retryMs) {
-      try {
-        const errorJson = JSON.parse(await response.clone().text());
-        retryMs = this.parseRetryFromErrorMessage(errorJson?.error?.message || errorJson?.message || "");
-      } catch {
-        // ignore parse errors → fall through to backoff
-      }
-    }
-    if (retryMs) return retryMs <= MAX_RETRY_AFTER_MS ? retryMs : false;
-    if (response.status === HTTP_STATUS.RATE_LIMITED) {
-      return Math.min(1000 * (2 ** attempt), MAX_RETRY_AFTER_MS); // exponential backoff
-    }
-    return false;
-  }
+   extractErrorMessage(errorJson, bodyText = "") {
+     return [
+       errorJson?.error?.message,
+       errorJson?.message,
+       errorJson?.error,
+       bodyText,
+     ].filter(Boolean).map(v => typeof v === "string" ? v : JSON.stringify(v)).join("\n");
+   }
+
+   isTransientAntigravityError(status, message) {
+     if (status === HTTP_STATUS.RATE_LIMITED) return true;
+     if (ANTIGRAVITY_TRANSIENT_STATUSES.has(status)) return true;
+     return ANTIGRAVITY_TRANSIENT_ERROR_PATTERNS.some(pattern => pattern.test(message || ""));
+   }
+
+   // Hook called by BaseExecutor.tryRetry: derive delay from Retry-After (header → body),
+   // cap at MAX_RETRY_AFTER_MS, else retry transient Antigravity failures with backoff.
+   // Return false to veto (fallback URL / final error).
+   async computeRetryDelay(response, attempt) {
+     let bodyText = "";
+     let errorJson = null;
+     let retryMs = this.parseRetryHeaders(response.headers);
+
+     try {
+       bodyText = await response.clone().text();
+       errorJson = bodyText ? JSON.parse(bodyText) : null;
+     } catch {
+       // ignore parse errors → fall through to status/message based retry
+     }
+
+     const errorMessage = this.extractErrorMessage(errorJson, bodyText);
+
+     if (!retryMs) {
+       retryMs = this.parseRetryFromErrorMessage(errorMessage);
+     }
+     if (retryMs) return retryMs <= MAX_RETRY_AFTER_MS ? retryMs : false;
+
+     if (!this.isTransientAntigravityError(response.status, errorMessage)) return false;
+
+     const cap = response.status === HTTP_STATUS.RATE_LIMITED
+       ? MAX_RETRY_AFTER_MS
+       : ANTIGRAVITY_TRANSIENT_RETRY_MAX_MS;
+     return Math.min(1000 * (2 ** attempt), cap); // exponential backoff
+   }
 
   /**
    * Cloak tools before sending to Antigravity provider (anti-ban):

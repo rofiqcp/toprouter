@@ -1,5 +1,5 @@
 // Latest schema version — bumped when a migration is added in ./migrations/
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 3;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -102,29 +102,33 @@ export const TABLES = {
     primaryKey: "PRIMARY KEY (scope, key)",
     indexes: ["CREATE INDEX IF NOT EXISTS idx_kv_scope ON kv(scope)"],
   },
-  usageHistory: {
-    columns: {
-      id: "INTEGER PRIMARY KEY AUTOINCREMENT",
-      timestamp: "TEXT NOT NULL",
-      provider: "TEXT",
-      model: "TEXT",
-      connectionId: "TEXT",
-      apiKey: "TEXT",
-      endpoint: "TEXT",
-      promptTokens: "INTEGER DEFAULT 0",
-      completionTokens: "INTEGER DEFAULT 0",
-      cost: "REAL DEFAULT 0",
-      status: "TEXT",
-      tokens: "TEXT",
-      meta: "TEXT",
+usageHistory: {
+      columns: {
+        id: "INTEGER PRIMARY KEY AUTOINCREMENT",
+        timestamp: "TEXT NOT NULL",
+        provider: "TEXT",
+        model: "TEXT",
+        connectionId: "TEXT",
+        apiKey: "TEXT",
+        endpoint: "TEXT",
+        promptTokens: "INTEGER DEFAULT 0",
+        completionTokens: "INTEGER DEFAULT 0",
+        cost: "REAL DEFAULT 0",
+        status: "TEXT",
+        tokens: "TEXT",
+        meta: "TEXT",
+      },
+      indexes: [
+        "CREATE INDEX IF NOT EXISTS idx_uh_ts ON usageHistory(timestamp DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_uh_provider ON usageHistory(provider)",
+        "CREATE INDEX IF NOT EXISTS idx_uh_model ON usageHistory(model)",
+        "CREATE INDEX IF NOT EXISTS idx_uh_conn ON usageHistory(connectionId)",
+        "CREATE INDEX IF NOT EXISTS idx_uh_ts_provider ON usageHistory(timestamp DESC, provider)",
+        "CREATE INDEX IF NOT EXISTS idx_uh_ts_model ON usageHistory(timestamp DESC, model)",
+        "CREATE INDEX IF NOT EXISTS idx_uh_ts_conn ON usageHistory(timestamp DESC, connectionId)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_usage_dedup ON usageHistory(timestamp, provider, model, connectionId, apiKey, promptTokens, completionTokens)",
+      ],
     },
-    indexes: [
-      "CREATE INDEX IF NOT EXISTS idx_uh_ts ON usageHistory(timestamp DESC)",
-      "CREATE INDEX IF NOT EXISTS idx_uh_provider ON usageHistory(provider)",
-      "CREATE INDEX IF NOT EXISTS idx_uh_model ON usageHistory(model)",
-      "CREATE INDEX IF NOT EXISTS idx_uh_conn ON usageHistory(connectionId)",
-    ],
-  },
   usageDaily: {
     columns: {
       dateKey: "TEXT PRIMARY KEY",

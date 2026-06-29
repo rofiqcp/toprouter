@@ -157,18 +157,35 @@ function createTxAdapter(client) {
 export function createPgAdapter() {
   const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    max: parseInt(process.env.PG_MAX_CONNECTIONS || "10", 10),
+    max: parseInt(process.env.PG_MAX_CONNECTIONS || "50", 10),
     idleTimeoutMillis: parseInt(process.env.PG_IDLE_TIMEOUT_MS || "10000", 10),
     connectionTimeoutMillis: parseInt(
       process.env.PG_CONNECTION_TIMEOUT_MS || "5000",
       10,
     ),
+    query_timeout: parseInt(process.env.PG_QUERY_TIMEOUT_MS || "30000", 10),
+    statement_timeout: parseInt(process.env.PG_STATEMENT_TIMEOUT_MS || "30000", 10),
+    application_name: "toprouter",
   });
 
   let _txClient = null; // active transaction client
 
   pool.on("error", (err) => {
     console.error("[pgAdapter] Unexpected pool error:", err.message);
+  });
+
+  pool.on("connect", () => {
+    // Optional: log new connections (can be noisy)
+    // console.debug("[pgAdapter] New connection established");
+  });
+
+  pool.on("acquire", () => {
+    // Optional: pool.totalCount = pool.totalCount (max), idleCount = pool.idleCount, waitingCount = pool.waitingCount
+    // console.debug(`[pgAdapter] Client acquired. Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
+  });
+
+  pool.on("remove", () => {
+    // console.debug("[pgAdapter] Client removed from pool");
   });
 
   // Execute SQL, routing through transaction client if one is active

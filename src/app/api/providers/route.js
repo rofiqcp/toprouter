@@ -151,16 +151,16 @@ export async function POST(request) {
         nodeName: node.name,
       };
     } else if (isCustomEmbeddingProvider(provider)) {
-      const node = await getProviderNodeById(provider);
-      if (!node) {
-        return NextResponse.json({ error: "Custom Embedding node not found" }, { status: 404 });
-      }
-      providerSpecificData = {
-        prefix: node.prefix,
-        baseUrl: node.baseUrl,
-        nodeName: node.name,
-      };
-    }
+       const node = await getProviderNodeById(provider);
+       if (!node) {
+         return NextResponse.json({ error: "Custom Embedding node not found" }, { status: 404 });
+       }
+       providerSpecificData = {
+         prefix: node.prefix,
+         baseUrl: node.baseUrl,
+         nodeName: node.name,
+       };
+     }
 
     const mergedProviderSpecificData = {
       ...(providerSpecificData || {}),

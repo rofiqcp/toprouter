@@ -28,7 +28,7 @@ is_running() {
 stop_all() {
     echo -e "${YELLOW}Menghentikan top Router...${NC}"; echo ""
     command -v pm2 &>/dev/null || { echo -e "   ${RED}ERROR${NC} - pm2 tidak ditemukan"; return 1; }
-    pm2 delete top Router 2>/dev/null && echo -e "   ${GREEN}✓${NC} TopRouter dihentikan" || echo -e "   ${GRAY}○${NC} TopRouter tidak berjalan"
+    pm2 delete toprouter toprouter-backend 2>/dev/null || true
     pm2 save
     sleep 2
     echo ""; echo -e "${GREEN}TopRouter dihentikan!${NC}"; echo ""
@@ -82,14 +82,15 @@ build_and_start() {
     echo -e "${CYAN}  Memulai TopRouter (Build + Start)${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════════${NC}"; echo ""
 
-    stop_all; build_app; echo ""
+    build_app
+    echo ""
     do_start_services
 }
 
 check_status() {
     echo -e "${YELLOW}Status Server:${NC}"; echo ""
     echo -e "${YELLOW}PM2 Processes:${NC}"
-    pm2 list 2>/dev/null | grep top Router || echo -e "   ${GRAY}○${NC} Tidak ada proses top Router"
+    pm2 list 2>/dev/null | grep -E "toprouter|toprouter-backend" || echo -e "   ${GRAY}○${NC} Tidak ada proses toprouter"
     echo ""; echo -e "${YELLOW}Port Status:${NC}"
     port_listening $PORT && echo -e "   ${GREEN}✓${NC} Port $PORT: LISTENING" || echo -e "   ${RED}✗${NC} Port $PORT: NOT LISTENING"
     echo ""

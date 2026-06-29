@@ -10,6 +10,7 @@
 import express from "express";
 import cors from "cors";
 import { expressToWebRequest, webResponseToExpress } from "./adapter.js";
+import { createRateLimitMiddleware } from "./middleware/rateLimit.js";
 
 // ─── Handlers (same modules used by Next.js routes) ───
 import { handleChat } from "../sse/handlers/chat.js";
@@ -84,6 +85,12 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Rate limiting — protect against DoS attacks
+// 1000 requests per minute per IP (adjustable via env)
+const rateLimitMax = parseInt(process.env.RATE_LIMIT_MAX || "1000", 10);
+const rateLimitWindowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10);
+app.use(createRateLimitMiddleware(rateLimitMax, rateLimitWindowMs));
 
 // ─── Helper: wrap a Web-API handler into Express middleware ───
 function wrapHandler(handler, needsInit = false) {

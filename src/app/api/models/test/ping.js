@@ -128,14 +128,16 @@ export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:$
       return { ok: false, latencyMs, status: res.status, error: "Provider returned no transcription text for this model" };
     }
     return { ok: true, latencyMs, error: null, status: res.status };
-  }
+   }
 
   const res = await fetch(`${baseUrl}/api/v1/chat/completions`, {
     method: "POST",
     headers,
     body: JSON.stringify({
       model,
-      max_tokens: 1,
+      // Claude-on-Copilot returns empty choices at max_tokens:1 (budget is spent
+      // before a content token emits), so a 1-token probe yields a false negative.
+      max_tokens: 16,
       stream: false,
       messages: [{ role: "user", content: "hi" }],
     }),

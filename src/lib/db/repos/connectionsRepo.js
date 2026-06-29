@@ -97,13 +97,15 @@ export async function createProviderConnection(data) {
       const incomingWs = data.providerSpecificData?.chatgptAccountId;
       existing = all.find(c => {
         if (c.authType !== "oauth" || c.email !== data.email) return false;
+        // If both sides have a workspace ID, they must match for dedup
         const existingWs = c.providerSpecificData?.chatgptAccountId;
         if (incomingWs && existingWs) return incomingWs === existingWs;
-        return true;
+        return true; // fallback: email-only match for non-workspace providers
       });
     } else if (data.authType === "apikey" && data.name) {
       existing = all.find(c => c.authType === "apikey" && c.name === data.name);
     }
+    // access_token: never dedup — user manages duplicates manually
 
     if (existing) {
       const merged = { ...existing, ...data, updatedAt: now };
