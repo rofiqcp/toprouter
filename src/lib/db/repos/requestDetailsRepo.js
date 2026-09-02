@@ -4,7 +4,7 @@ import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 const DEFAULT_MAX_RECORDS = 200;
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_FLUSH_INTERVAL_MS = 5000;
-const DEFAULT_MAX_JSON_SIZE = 50 * 1024;
+const DEFAULT_MAX_JSON_SIZE = 5 * 1024;
 const CONFIG_CACHE_TTL_MS = 5000;
 
 let cachedConfig = null;
@@ -15,10 +15,25 @@ async function getObservabilityConfig() {
   try {
     const { getSettings } = await import("./settingsRepo.js");
     const settings = await getSettings();
-    const envEnabled = process.env.OBSERVABILITY_ENABLED !== "false";
-    const enabled = typeof settings.enableObservability2 === "boolean"
-      ? settings.enableObservability2
-      : envEnabled;
+    const envRequestLogs = process.env.ENABLE_REQUEST_LOGS;
+    if (envRequestLogs !== undefined) {
+      const enabled = envRequestLogs.toLowerCase() === "true";
+      cachedConfig = {
+        enabled,
+        maxRecords: settings.observabilityMaxRecords || parseInt(process.env.OBSERVABILITY_MAX_RECORDS || String(DEFAULT_MAX_RECORDS), 10),
+        batchSize: settings.observabilityBatchSize || parseInt(process.env.OBSERVABILITY_BATCH_SIZE || String(DEFAULT_BATCH_SIZE), 10),
+        flushIntervalMs: settings.observabilityFlushIntervalMs || parseInt(process.env.OBSERVABILITY_FLUSH_INTERVAL_MS || String(DEFAULT_FLUSH_INTERVAL_MS), 10),
+        maxJsonSize: (settings.observabilityMaxJsonSize || parseInt(process.env.OBSERVABILITY_MAX_JSON_SIZE || "5", 10)) * 1024,
+      };
+      cachedConfigTs = Date.now();
+      return cachedConfig;
+    }
+    const envFallback = process.env.OBSERVABILITY_ENABLED !== "false";
+    const uiFlag = typeof settings.enableObservability === "boolean";
+    const enabled = uiFlag
+      ? settings.enableObservability
+      : envFallback;
+
     cachedConfig = {
       enabled,
       maxRecords: settings.observabilityMaxRecords || parseInt(process.env.OBSERVABILITY_MAX_RECORDS || String(DEFAULT_MAX_RECORDS), 10),
@@ -53,6 +68,8 @@ function sanitizeHeaders(headers) {
   return sanitized;
 }
 
+export const __test__ = { sanitizeHeaders };
+
 function generateDetailId(model) {
   const timestamp = new Date().toISOString();
   const random = Math.random().toString(36).substring(2, 8);
@@ -63,7 +80,7 @@ function generateDetailId(model) {
 function truncateField(obj, maxSize) {
   const str = JSON.stringify(obj || {});
   if (str.length > maxSize) {
-    return { _truncated: true, _originalSize: str.length, _preview: str.substring(0, 5000), _tail: str.substring(str.length - 2000) };
+    return { _truncated: true, _originalSize: str.length, _preview: str.substring(0, 200) };
   }
   return obj || {};
 }
@@ -98,6 +115,7 @@ async function flushToDatabase() {
             providerRequest: truncateField(item.providerRequest, config.maxJsonSize),
             providerResponse: truncateField(item.providerResponse, config.maxJsonSize),
             response: truncateField(item.response, config.maxJsonSize),
+            pxpipe: item.pxpipe || undefined,
           };
 
           await tx.run(
@@ -124,7 +142,7 @@ async function flushToDatabase() {
 
 export async function saveRequestDetail(detail) {
   const config = await getObservabilityConfig();
-  if (!config.enabled) return;
+  if (!config.enabled) {return;}
 
   writeBuffer.push(detail);
 
@@ -176,11 +194,8 @@ export async function getRequestDetails(filter = {}) {
 
 export async function getRequestDetailById(id) {
   const db = await getAdapter();
-  const row = await db.get(
-    `SELECT * FROM requestDetails WHERE id = ?`,
-    [id]
-  );
-  return row ? row : undefined;
+  const row = await db.get(`SELECT data FROM requestDetails WHERE id = ?`, [id]);
+  return row ? parseJson(row.data, null) : null;
 }
 
 // DISTINCT provider list from requestDetails (provider column)

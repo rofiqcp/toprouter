@@ -1,3 +1,0 @@
-[     496ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:20128/icons/icon-192.svg:0
-[     559ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:20128/icons/icon-192.svg (Download error or resource isn't a valid image) @ http://localhost:20128/login:0
-[     725ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ http://localhost:20128/login:0

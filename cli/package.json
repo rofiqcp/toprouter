@@ -1,6 +1,6 @@
 {
   "name": "toprouter",
-  "version": "0.5.8",
+  "version": "0.5.59",
   "description": "TopRouter CLI - Start and manage TopRouter server",
   "bin": {
     "toprouter": "./cli.js"

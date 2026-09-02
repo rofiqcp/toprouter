@@ -79,3 +79,10 @@ gitbook/README.md
 database.json
 database.json.*
 *.bak
+
+# Local/debug artifacts
+.playwright-mcp/
+.github_toprouter_backup/
+
+# Local runtime logs
+/log/
