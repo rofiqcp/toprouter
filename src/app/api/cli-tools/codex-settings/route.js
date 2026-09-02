@@ -76,7 +76,7 @@ const readConfig = async () => {
 // Check if config has TopRouter settings
 const hasTopRouterConfig = (config) => {
   if (!config) return false;
-  return config.includes("model_provider = \"toprouter\"") || config.includes("[model_providers.toprouter]");
+  return config.includes("model_provider = \"9router\"") || config.includes("[model_providers.9router]");
 };
 
 // GET - Check codex CLI and read current settings
@@ -130,12 +130,12 @@ export async function POST(request) {
 
     // Update only TopRouter related fields (api_key goes to auth.json, not config.toml)
     parsed.model = model;
-    parsed.model_provider = "toprouter";
+    parsed.model_provider = "9router";
 
-    // Update or create toprouter provider section (no api_key - Codex reads from auth.json)
+    // Update or create 9router provider section (no api_key - Codex reads from auth.json)
     // Ensure /v1 suffix is added only once
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
-    setNestedSection(parsed, "model_providers.toprouter", {
+    setNestedSection(parsed, "model_providers.9router", {
       name: "TopRouter",
       base_url: normalizedBaseUrl,
       wire_api: "responses",
@@ -195,14 +195,14 @@ export async function DELETE() {
       throw error;
     }
 
-    // Remove TopRouter related root fields only if they point to toprouter
-    if (parsed.model_provider === "toprouter") {
+    // Remove TopRouter related root fields only if they point to 9router
+    if (parsed.model_provider === "9router") {
       delete parsed.model;
       delete parsed.model_provider;
     }
 
-    // Remove toprouter provider section
-    deleteNestedSection(parsed, "model_providers.toprouter");
+    // Remove 9router provider section
+    deleteNestedSection(parsed, "model_providers.9router");
 
     // Remove subagent configuration
     deleteNestedSection(parsed, "agents.subagent");

@@ -5,9 +5,10 @@ export default {
     // PostgreSQL: ALTER column type from TEXT to TIMESTAMPTZ
     // SQLite: column is TEXT (ISO8601 string), no change needed
     
-    const driver = db.constructor.name;
+    const driverName = db?.constructor?.name;
+    const isPg = db?.driver === "pg" || driverName === "PostgresAdapter" || driverName === "PgAdapter";
     
-    if (driver === "PostgresAdapter" || driver === "PgAdapter") {
+    if (isPg) {
       // PostgreSQL: convert timestamp column to TIMESTAMPTZ
       await db.exec(`
         ALTER TABLE "usageHistory" 

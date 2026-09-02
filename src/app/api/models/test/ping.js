@@ -128,7 +128,7 @@ export async function pingModelByKind(model, kind, baseUrl = `http://127.0.0.1:$
       return { ok: false, latencyMs, status: res.status, error: "Provider returned no transcription text for this model" };
     }
     return { ok: true, latencyMs, error: null, status: res.status };
-   }
+  }
 
   const res = await fetch(`${baseUrl}/api/v1/chat/completions`, {
     method: "POST",

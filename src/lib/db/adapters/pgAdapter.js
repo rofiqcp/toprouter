@@ -14,6 +14,37 @@ const TABLE_PKS = {
   _meta: ["key"],
 };
 
+// Table name mappings: camelCase (SQLite code) → PostgreSQL actual table names
+const TABLE_NAME_MAP = {
+  apiKeys: "apikeys",
+  providerConnections: "providerconnections",
+  providerNodes: "providernodes",
+  proxyPools: "proxypools",
+  requestDetails: "requestdetails",
+  usageDaily: "usagedaily",
+  usageHistory: "usagehistory",
+};
+
+const REVERSE_TABLE_NAME_MAP = Object.fromEntries(
+  Object.entries(TABLE_NAME_MAP).map(([camel, pg]) => [pg, camel])
+);
+
+function translateTableName(table) {
+  return TABLE_NAME_MAP[table] || table;
+}
+
+function getTablePks(table) {
+  return TABLE_PKS[table] || TABLE_PKS[REVERSE_TABLE_NAME_MAP[table]];
+}
+
+function translateTableNames(sql) {
+  let out = sql;
+  Object.entries(TABLE_NAME_MAP).forEach(([camel, pg]) => {
+    out = out.replace(new RegExp(`\\b${camel}\\b`, "g"), pg);
+  });
+  return out;
+}
+
 // Column name mappings: PG lowercase → camelCase (SQLite compat)
 const COLUMN_MAP = {
   authtype: "authType",
@@ -75,12 +106,15 @@ function translateSQL(sql) {
   let paramIndex = 0;
   out = out.replace(/\?/g, () => `$${++paramIndex}`);
 
+  // Translate camelCase table names to PostgreSQL actual table names.
+  out = translateTableNames(out);
+
   // INSERT OR REPLACE INTO table(cols) VALUES(...) → INSERT INTO table(cols) VALUES(...) ON CONFLICT (pk) DO UPDATE SET ...
   const irep = /INSERT\s+OR\s+REPLACE\s+INTO\s+(\w+)\s*\(([^)]+)\)/i;
   const m = out.match(irep);
   if (m) {
     const table = m[1];
-    const pks = TABLE_PKS[table];
+    const pks = getTablePks(table);
     if (pks) {
       const cols = m[2].split(",").map((c) => c.trim());
       const setClause = cols
@@ -135,7 +169,7 @@ function createTxAdapter(client) {
       // PRAGMA table_info → PG information_schema
       const pm = sql.match(/PRAGMA\s+table_info\((\w+)\)/i);
       if (pm) {
-        const table = pm[1];
+        const table = translateTableName(pm[1]);
         return client.query(
           `SELECT column_name AS name, data_type AS type, is_nullable = 'YES' AS "notnull", column_default AS dflt_value, ordinal_position AS cid FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
           [table]
@@ -157,7 +191,7 @@ function createTxAdapter(client) {
 export function createPgAdapter() {
   const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    max: parseInt(process.env.PG_MAX_CONNECTIONS || "50", 10),
+    max: parseInt(process.env.PG_MAX_CONNECTIONS || "100", 10),
     idleTimeoutMillis: parseInt(process.env.PG_IDLE_TIMEOUT_MS || "10000", 10),
     connectionTimeoutMillis: parseInt(
       process.env.PG_CONNECTION_TIMEOUT_MS || "5000",
@@ -168,7 +202,9 @@ export function createPgAdapter() {
     application_name: "toprouter",
   });
 
-  let _txClient = null; // active transaction client
+  pool.on("remove", () => {
+    // console.debug("[pgAdapter] Client removed from pool");
+  });
 
   pool.on("error", (err) => {
     console.error("[pgAdapter] Unexpected pool error:", err.message);
@@ -184,27 +220,17 @@ export function createPgAdapter() {
     // console.debug(`[pgAdapter] Client acquired. Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`);
   });
 
-  pool.on("remove", () => {
-    // console.debug("[pgAdapter] Client removed from pool");
-  });
-
-  // Execute SQL, routing through transaction client if one is active
-  async function _query(sql, params = []) {
-    if (_txClient) return _txClient.query(sql, params);
-    return pool.query(sql, params);
-  }
-
   async function run(sql, params = []) {
     const t = translateSQL(sql);
     if (t === null) return { changes: 0, lastInsertRowid: null };
-    const r = await _query(t, params);
+    const r = await pool.query(t, params);
     return { changes: r.rowCount ?? 0, lastInsertRowid: null };
   }
 
   async function get(sql, params = []) {
     const t = translateSQL(sql);
     if (t === null) return undefined;
-    const r = await _query(t, params);
+    const r = await pool.query(t, params);
     return r.rows.length > 0 ? normalizeRow(r.rows[0]) : undefined;
   }
 
@@ -212,8 +238,8 @@ export function createPgAdapter() {
     // PRAGMA table_info → PG information_schema
     const pm = sql.match(/PRAGMA\s+table_info\((\w+)\)/i);
     if (pm) {
-      const table = pm[1];
-      const r = await _query(
+      const table = translateTableName(pm[1]);
+      const r = await pool.query(
         `SELECT column_name AS name, data_type AS type, is_nullable = 'YES' AS "notnull", column_default AS dflt_value, ordinal_position AS cid FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`,
         [table]
       );
@@ -221,36 +247,32 @@ export function createPgAdapter() {
     }
     const t = translateSQL(sql);
     if (t === null) return [];
-    const r = await _query(t, params);
+    const r = await pool.query(t, params);
     return normalizeRows(r.rows);
   }
 
   async function exec(sql) {
     const t = translateSQL(sql);
     if (t === null) return;
-    await _query(t);
+    await pool.query(t);
   }
 
   async function transaction(fn) {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      _txClient = client;
       const result = await fn(createTxAdapter(client));
       await client.query("COMMIT");
-      _txClient = null;
-      client.release();
       return result;
     } catch (e) {
-      _txClient = null;
       await client.query("ROLLBACK").catch(() => {});
-      client.release();
       throw e;
+    } finally {
+      client.release();
     }
   }
 
   async function close() {
-    _txClient = null;
     await pool.end();
   }
 

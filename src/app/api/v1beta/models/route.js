@@ -60,4 +60,3 @@ export async function GET() {
     return Response.json({ error: { message: error.message } }, { status: 500 });
   }
 }
-

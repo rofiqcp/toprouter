@@ -58,11 +58,10 @@ export default function DeepSeekTuiToolCard({
   }, [initialStatus]);
 
   useEffect(() => {
-    if (isExpanded && !deepseekStatus) {
-      checkStatus();
+    if (isExpanded) {
+      if (!deepseekStatus) checkStatus();
       fetchModelAliases();
     }
-    if (isExpanded) fetchModelAliases();
   }, [isExpanded]);
 
   const fetchModelAliases = async () => {
@@ -116,7 +115,7 @@ export default function DeepSeekTuiToolCard({
     try {
       const keyToUse = selectedApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
-        || (!cloudEnabled ? "sk_toprouter" : null);
+        || (!cloudEnabled ? "sk_9router" : null);
 
       const res = await fetch(ENDPOINT, {
         method: "POST",
@@ -169,7 +168,7 @@ export default function DeepSeekTuiToolCard({
   const getManualConfigs = () => {
     const keyToUse = (selectedApiKey && selectedApiKey.trim())
       ? selectedApiKey
-      : (!cloudEnabled ? "sk_toprouter" : "<API_KEY_FROM_DASHBOARD>");
+      : (!cloudEnabled ? "sk_9router" : "<API_KEY_FROM_DASHBOARD>");
 
     const tomlContent = `[providers.openai]
 base_url = "${getEffectiveBaseUrl()}"
@@ -187,7 +186,7 @@ model = "${selectedModel || "provider/model-id"}"
       <div className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center" onClick={onToggle}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="size-8 flex items-center justify-center shrink-0">
-            <Image src={tool.image || "/providers/deepseek-tui.png"} alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} />
+            <Image src={tool.image || "/providers/deepseek-tui.png"} alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} loading="lazy" decoding="async" />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -220,7 +219,7 @@ model = "${selectedModel || "provider/model-id"}"
                     <p className="font-medium text-yellow-600 dark:text-yellow-400">DeepSeek TUI not detected locally</p>
                     <p className="text-sm text-text-muted mt-1">Install via npm:</p>
                     <code className="block mt-2 p-2 bg-black/20 rounded text-xs font-mono">npm install -g deepseek-tui</code>
-                    <p className="text-sm text-text-muted mt-2">Manual configuration is still available if toprouter is deployed on a remote server.</p>
+                    <p className="text-sm text-text-muted mt-2">Manual configuration is still available if 9router is deployed on a remote server.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pl-9">
@@ -317,15 +316,17 @@ model = "${selectedModel || "provider/model-id"}"
         </div>
       )}
 
-      <ModelSelectModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSelect={handleModelSelect}
-        selectedModel={selectedModel}
-        activeProviders={activeProviders}
-        modelAliases={modelAliases}
-        title="Select Model for DeepSeek TUI"
-      />
+      {modalOpen && (
+        <ModelSelectModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onSelect={handleModelSelect}
+          selectedModel={selectedModel}
+          activeProviders={activeProviders}
+          modelAliases={modelAliases}
+          title="Select Model for DeepSeek TUI"
+        />
+      )}
 
       <ManualConfigModal
         isOpen={showManualConfigModal}

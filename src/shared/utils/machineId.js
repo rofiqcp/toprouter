@@ -1,4 +1,10 @@
-import { machineIdSync } from 'node-machine-id';
+// node-machine-id@1.x is CommonJS and does NOT provide a named ESM export.
+// Import the default (CJS module) and access .machineIdSync defensively so the
+// file loads correctly under the ESM register hook (register.mjs) used by the
+// standalone backend. A missing/incorrect export must never crash app startup.
+import nodeMachineId from 'node-machine-id';
+const machineIdSync = nodeMachineId?.machineIdSync?.bind?.(nodeMachineId)
+  || (typeof nodeMachineId === 'function' ? nodeMachineId : null);
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -20,7 +26,7 @@ function loadRawMachineId() {
     if (cachedRawId) return cachedRawId;
   } catch {}
   try {
-    cachedRawId = machineIdSync();
+    cachedRawId = machineIdSync ? machineIdSync() : crypto.randomUUID();
   } catch {
     cachedRawId = crypto.randomUUID();
   }

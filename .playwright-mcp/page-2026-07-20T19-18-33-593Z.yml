@@ -1,0 +1,58 @@
+- generic [ref=e2]:
+  - complementary [ref=e4]:
+    - link "TopRouter Proxy v0.5.40" [ref=e10] [cursor=pointer]:
+      - /url: /dashboard
+      - generic [ref=e12]:
+        - heading "TopRouter Proxy" [level=1] [ref=e13]
+        - generic [ref=e14]: v0.5.40
+    - navigation [ref=e15]:
+      - link "Endpoint & Key" [ref=e16] [cursor=pointer]:
+        - /url: /dashboard/endpoint
+        - generic [ref=e17]: Endpoint & Key
+      - link "Providers" [ref=e18] [cursor=pointer]:
+        - /url: /dashboard/providers
+        - generic [ref=e19]: Providers
+      - link "Combos" [ref=e20] [cursor=pointer]:
+        - /url: /dashboard/combos
+        - generic [ref=e21]: Combos
+      - link "Usage" [ref=e22] [cursor=pointer]:
+        - /url: /dashboard/usage
+        - generic [ref=e23]: Usage
+      - link "Quota Tracker" [ref=e24] [cursor=pointer]:
+        - /url: /dashboard/quota
+        - generic [ref=e25]: Quota Tracker
+      - link "Token Saver" [ref=e26] [cursor=pointer]:
+        - /url: /dashboard/token-saver
+        - generic [ref=e27]: Token Saver
+      - link "CLI Tools" [ref=e28] [cursor=pointer]:
+        - /url: /dashboard/cli-tools
+        - generic [ref=e29]: CLI Tools
+      - generic [ref=e30]:
+        - paragraph [ref=e31]: System
+        - button "Media Providers" [ref=e32] [cursor=pointer]:
+          - generic [ref=e33]: Media Providers
+        - link "Proxy Pools" [ref=e34] [cursor=pointer]:
+          - /url: /dashboard/proxy-pools
+          - generic [ref=e35]: Proxy Pools
+        - link "Skills" [ref=e36] [cursor=pointer]:
+          - /url: /dashboard/skills
+          - generic [ref=e37]: Skills
+        - link "Console Log" [ref=e38] [cursor=pointer]:
+          - /url: /dashboard/console-log
+          - generic [ref=e39]: Console Log
+        - button "Remote" [ref=e40] [cursor=pointer]:
+          - generic [ref=e41]: Remote
+        - link "Settings" [ref=e42] [cursor=pointer]:
+          - /url: /dashboard/profile
+          - generic [ref=e43]: Settings
+  - main [ref=e44]:
+    - generic [ref=e45]:
+      - button [ref=e47] [cursor=pointer]
+      - heading "Endpoint" [level=1] [ref=e51]
+      - generic [ref=e52]:
+        - button "Donate" [ref=e53] [cursor=pointer]:
+          - generic [ref=e54]: Donate
+        - button "Switch to dark mode" [ref=e55] [cursor=pointer]
+        - button "🇺🇸" [ref=e56] [cursor=pointer]:
+          - generic [ref=e57]: 🇺🇸
+        - button "Menu" [ref=e59] [cursor=pointer]

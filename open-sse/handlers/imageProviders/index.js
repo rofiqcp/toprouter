@@ -12,7 +12,8 @@ import blackForestLabs from "./blackForestLabs.js";
 import runwayml from "./runwayml.js";
 import cloudflareAi from "./cloudflareAi.js";
 import antigravity from "./antigravity.js";
-import alibabaMedia from "./alibabaMedia.js";
+import kie from "./kie.js";
+import deapi from "./deapi.js";
 
 const ADAPTERS = {
   openai: createOpenAIAdapter("openai"),
@@ -33,7 +34,8 @@ const ADAPTERS = {
   "black-forest-labs": blackForestLabs,
   runwayml,
   "cloudflare-ai": cloudflareAi,
-  "alibaba-media": alibabaMedia,
+  kie,
+  deapi,
 };
 
 export function getImageAdapter(provider) {

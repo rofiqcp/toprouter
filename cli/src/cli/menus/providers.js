@@ -348,7 +348,7 @@ async function showConnectionActions(connection, providerId, breadcrumb = []) {
         label: "Test Connection",
         action: async () => {
           showStatus("Testing connection...", "info");
-          const result = await api.testConnection(connection.id);
+          const result = await api.testProvider(connection.id);
           if (result.success) {
             showStatus("Connection is working!", "success");
           } else {

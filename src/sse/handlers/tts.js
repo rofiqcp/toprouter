@@ -9,7 +9,6 @@ import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
 import { handleComboChat } from "open-sse/services/combo.js";
-import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import * as log from "../utils/logger.js";
 
 // Derived from providers.js: any TTS provider not noAuth requires stored credentials
@@ -99,15 +98,7 @@ async function handleSingleModelTts(body, modelStr, responseFormat, language) {
 
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 
-    const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
-
-    const result = await handleTtsCore({ provider, model, input: body.input, credentials: refreshedCredentials, responseFormat, language, onCredentialsRefreshed: async (newCreds) => {
-      await updateProviderCredentials(credentials.connectionId, {
-        ...newCreds,
-        existingProviderSpecificData: credentials.providerSpecificData,
-        testStatus: "active"
-      });
-    }});
+    const result = await handleTtsCore({ provider, model, input: body.input, credentials, responseFormat, language });
 
     if (result.success) return result.response;
 

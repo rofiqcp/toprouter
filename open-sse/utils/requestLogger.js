@@ -8,10 +8,6 @@ let fs = null;
 let path = null;
 let LOGS_DIR = null;
 
-const FLUSH_INTERVAL = 100;
-const QUEUE_SIZE_LIMIT = 50;
-const writeQueues = new Map();
-
 // Lazy load Node.js modules (avoid top-level await)
 async function ensureNodeModules() {
   if (!isNode || !LOGGING_ENABLED || fs) return;
@@ -21,69 +17,6 @@ async function ensureNodeModules() {
     LOGS_DIR = path.join(typeof process !== "undefined" && process.cwd ? process.cwd() : ".", "logs");
   } catch {
     // Running in non-Node environment (Worker, Browser, etc.)
-  }
-}
-
-function getOrCreateQueue(filePath) {
-  if (!writeQueues.has(filePath)) {
-    const queue = {
-      items: [],
-      flushing: false,
-      timerId: null
-    };
-    writeQueues.set(filePath, queue);
-  }
-  return writeQueues.get(filePath);
-}
-
-async function flushQueue(filePath) {
-  const queue = getOrCreateQueue(filePath);
-  if (queue.items.length === 0 || queue.flushing) return;
-  
-  queue.flushing = true;
-  const itemsToWrite = queue.items.splice(0);
-  
-  try {
-    const content = itemsToWrite.join('');
-    await fs.promises.appendFile(filePath, content, 'utf-8');
-  } catch (err) {
-    // Ignore append errors
-  } finally {
-    queue.flushing = false;
-    
-    if (queue.items.length > 0) {
-      scheduleFlush(filePath);
-    } else if (queue.timerId) {
-      clearTimeout(queue.timerId);
-      queue.timerId = null;
-    }
-  }
-}
-
-function scheduleFlush(filePath) {
-  const queue = getOrCreateQueue(filePath);
-  if (queue.timerId) return;
-  
-  queue.timerId = setTimeout(() => {
-    queue.timerId = null;
-    flushQueue(filePath);
-  }, FLUSH_INTERVAL);
-  
-  if (queue.timerId.unref) queue.timerId.unref();
-}
-
-function enqueueWrite(filePath, chunk) {
-  const queue = getOrCreateQueue(filePath);
-  queue.items.push(chunk);
-  
-  if (queue.items.length >= QUEUE_SIZE_LIMIT) {
-    if (queue.timerId) {
-      clearTimeout(queue.timerId);
-      queue.timerId = null;
-    }
-    flushQueue(filePath);
-  } else {
-    scheduleFlush(filePath);
   }
 }
 
@@ -115,7 +48,7 @@ async function createLogSession(sourceFormat, targetFormat, model) {
     const folderName = `${sourceFormat}_${targetFormat}_${safeModel}_${timestamp}`;
     const sessionPath = path.join(LOGS_DIR, folderName);
     
-    await fs.promises.mkdir(sessionPath, { recursive: true });
+    fs.mkdirSync(sessionPath, { recursive: true });
     
     return sessionPath;
   } catch (err) {
@@ -124,16 +57,16 @@ async function createLogSession(sourceFormat, targetFormat, model) {
   }
 }
 
-// Write JSON file (async, non-blocking, fire-and-forget)
+// Write JSON file
 function writeJsonFile(sessionPath, filename, data) {
   if (!fs || !sessionPath) return;
   
-  const filePath = path.join(sessionPath, filename);
-  const content = JSON.stringify(data, null, 2);
-  
-  fs.promises.writeFile(filePath, content, 'utf-8').catch(err => {
+  try {
+    const filePath = path.join(sessionPath, filename);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } catch (err) {
     console.log(`[LOG] Failed to write ${filename}:`, err.message);
-  });
+  }
 }
 
 // Mask sensitive data in headers (DISABLED - keep full token for testing)
@@ -245,15 +178,23 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
     // 5. Append streaming chunk to provider response
     appendProviderChunk(chunk) {
       if (!fs || !sessionPath) return;
-      const filePath = path.join(sessionPath, "5_res_provider.txt");
-      enqueueWrite(filePath, chunk);
+      try {
+        const filePath = path.join(sessionPath, "5_res_provider.txt");
+        fs.appendFileSync(filePath, chunk);
+      } catch (err) {
+        // Ignore append errors
+      }
     },
     
     // 6. Append OpenAI intermediate chunks (target → openai)
     appendOpenAIChunk(chunk) {
       if (!fs || !sessionPath) return;
-      const filePath = path.join(sessionPath, "6_res_openai.txt");
-      enqueueWrite(filePath, chunk);
+      try {
+        const filePath = path.join(sessionPath, "6_res_openai.txt");
+        fs.appendFileSync(filePath, chunk);
+      } catch (err) {
+        // Ignore append errors
+      }
     },
     
     // 7. Log converted response to client (for non-streaming)
@@ -267,8 +208,12 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
     // 7. Append streaming chunk to converted response
     appendConvertedChunk(chunk) {
       if (!fs || !sessionPath) return;
-      const filePath = path.join(sessionPath, "7_res_client.txt");
-      enqueueWrite(filePath, chunk);
+      try {
+        const filePath = path.join(sessionPath, "7_res_client.txt");
+        fs.appendFileSync(filePath, chunk);
+      } catch (err) {
+        // Ignore append errors
+      }
     },
     
     // 6. Log error
@@ -289,20 +234,27 @@ export function logResponse() {}
 export function logError(provider, { error, url, model, requestBody }) {
   if (!fs || !LOGS_DIR) return;
   
-  const date = new Date().toISOString().split("T")[0];
-  const logPath = path.join(LOGS_DIR, `${provider}-${date}.log`);
-  
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    type: "error",
-    provider,
-    model,
-    url,
-    error: error?.message || String(error),
-    stack: error?.stack,
-    requestBody
-  };
-  
-  const entryJson = JSON.stringify(logEntry) + "\n";
-  enqueueWrite(logPath, entryJson);
+  try {
+    if (!fs.existsSync(LOGS_DIR)) {
+      fs.mkdirSync(LOGS_DIR, { recursive: true });
+    }
+    
+    const date = new Date().toISOString().split("T")[0];
+    const logPath = path.join(LOGS_DIR, `${provider}-${date}.log`);
+    
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      type: "error",
+      provider,
+      model,
+      url,
+      error: error?.message || String(error),
+      stack: error?.stack,
+      requestBody
+    };
+    
+    fs.appendFileSync(logPath, JSON.stringify(logEntry) + "\n");
+  } catch (err) {
+    console.log("[LOG] Failed to write error log:", err.message);
+  }
 }

@@ -51,18 +51,6 @@ export const KIND_EXAMPLE_CONFIG = {
       { key: "output_format", label: "Codec", type: "select", default: "png", options: ["png", "jpeg", "webp"] },
     ],
   },
-  imageEdit: {
-    inputLabel: "Prompt",
-    inputPlaceholder: "Change the background to a beach sunset",
-    defaultInput: "Change the background to a beach sunset",
-    bodyKey: "prompt",
-    defaultResponse: `{\n  "data": [\n    { "url": "...", "b64_json": "..." }\n  ]\n}`,
-    extraFields: [
-      { key: "n", label: "n", type: "number", default: 1, min: 1, max: 4 },
-      { key: "size", label: "Size", type: "select", default: "auto", options: ["auto", "1024x1024", "1024x1536", "1536x1024", "1024x1792", "1792x1024"] },
-      { key: "response_format", label: "Format", type: "select", default: "", options: ["", "url", "b64_json"] },
-    ],
-  },
   imageToText: {
     inputLabel: "Image URL",
     inputPlaceholder: "https://example.com/image.png",

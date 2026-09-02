@@ -30,7 +30,13 @@ export {
 // API keys
 export {
   getApiKeys, getApiKeyById, createApiKey, updateApiKey, deleteApiKey, validateApiKey,
+  validateOAuthAccessToken, validateStaticApiKey,
 } from "./repos/apiKeysRepo.js";
+
+// OAuth clients (TopRouter as Device Authorization Server)
+export {
+  getOauthClients, getOauthClientById, createOauthClient, updateOauthClient, deleteOauthClient, touchOauthClient,
+} from "./repos/oauthClientsRepo.js";
 
 // Combos
 export {
@@ -64,7 +70,7 @@ export {
 
 // Request details
 export {
-  saveRequestDetail, getRequestDetails, getRequestDetailById,
+  saveRequestDetail, getRequestDetails, getRequestDetailById, getDistinctProviders,
 } from "./repos/requestDetailsRepo.js";
 
 // Export/import full DB
@@ -151,6 +157,7 @@ export async function importDb(payload) {
       await tx.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('modelAliases', ?, ?)`, [a, stringifyJson(m)]);
     }
     for (const m of payload.customModels || []) {
+      if (!m || typeof m !== "object") continue;
       const k = `${m.providerAlias}|${m.id}|${m.type || "llm"}`;
       await tx.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('customModels', ?, ?)`, [k, stringifyJson(m)]);
     }

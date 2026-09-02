@@ -1,11 +1,12 @@
 import crypto from "crypto";
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
-import { OAUTH_ENDPOINTS, ANTIGRAVITY_HEADERS, INTERNAL_REQUEST_HEADER, AG_DEFAULT_TOOLS, AG_TOOL_SUFFIX } from "../config/appConstants.js";
+import { OAUTH_ENDPOINTS, ANTIGRAVITY_HEADERS, AG_DEFAULT_TOOLS, AG_TOOL_SUFFIX } from "../config/appConstants.js";
 import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { cleanJSONSchemaForAntigravity } from "../translator/formats/gemini.js";
+import { DEFAULT_THINKING_AG_SIGNATURE } from "../config/defaultThinkingSignature.js";
 
 // Sanitize function name: Gemini requires [a-zA-Z_][a-zA-Z0-9_.:\-]{0,63}
 function sanitizeFunctionName(name) {
@@ -17,7 +18,8 @@ function sanitizeFunctionName(name) {
 
 const MAX_RETRY_AFTER_MS = 10000;
 const ANTIGRAVITY_TRANSIENT_RETRY_MAX_MS = 15000;
-const MAX_ANTIGRAVITY_OUTPUT_TOKENS = 16384;
+const MAX_ANTIGRAVITY_OUTPUT_TOKENS = 64000;
+const ANTIGRAVITY_IDE_REQUEST_ID_RE = /^agent\/[^/]+\/\d+\/[^/]+\/\d+$/;
 
 const ANTIGRAVITY_TRANSIENT_ERROR_PATTERNS = [
   /high\s+traffic/i,
@@ -86,6 +88,27 @@ function parseImageConfig(model) {
   return config;
 }
 
+function uuidFromSeed(seed) {
+  const bytes = crypto.createHash("sha256").update(String(seed || "antigravity")).digest().subarray(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function buildIdeRequestId({ body, request, credentials, model, requestType }) {
+  if (ANTIGRAVITY_IDE_REQUEST_ID_RE.test(body?.requestId || "")) {
+    return body.requestId;
+  }
+
+  const sessionId = request?.sessionId || body?.request?.sessionId || credentials?._clientSessionId || credentials?.connectionId || credentials?.email || "anonymous";
+  const conversationId = uuidFromSeed(`antigravity:conversation:${sessionId}`);
+  const trajectoryId = uuidFromSeed(`antigravity:trajectory:${sessionId}:${model}:${requestType}`);
+  const contentCount = Array.isArray(request?.contents) ? request.contents.length : 1;
+  const step = Math.max(1, contentCount * 2 - 1);
+  return `agent/${conversationId}/${Date.now()}/${trajectoryId}/${step}`;
+}
+
 export class AntigravityExecutor extends BaseExecutor {
   constructor() {
     super("antigravity", PROVIDERS.antigravity);
@@ -103,14 +126,10 @@ export class AntigravityExecutor extends BaseExecutor {
   // sessionId comes from transformRequest output; base.execute runs transformRequest before
   // buildHeaders, so we read it from instance state cached there (fallback: explicit arg).
   buildHeaders(credentials, stream = true, sessionId = null) {
-    const sid = sessionId || this._lastSessionId;
     return {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${credentials.accessToken}`,
       "User-Agent": this.config.headers?.["User-Agent"] || ANTIGRAVITY_HEADERS["User-Agent"],
-      [INTERNAL_REQUEST_HEADER.name]: INTERNAL_REQUEST_HEADER.value,
-      ...(sid && { "X-Machine-Session-Id": sid }),
-      "Accept": stream ? "text/event-stream" : "application/json"
     };
   }
 
@@ -141,25 +160,26 @@ export class AntigravityExecutor extends BaseExecutor {
       });
 
       this._lastSessionId = sessionId;
+      const request = {
+        contents,
+        generationConfig: {
+          temperature: 1.0,
+          topP: 0.95,
+          topK: 40,
+          maxOutputTokens: 8192,
+          imageConfig,
+        },
+        sessionId,
+        // No tools, no systemInstruction, no safetySettings for image gen
+      };
 
       return {
         project: projectId,
         model: cleanModel,
         userAgent: "antigravity",
         requestType: "image_gen",
-        requestId: `agent-${crypto.randomUUID()}`,
-        request: {
-          contents,
-          generationConfig: {
-            temperature: 1.0,
-            topP: 0.95,
-            topK: 40,
-            maxOutputTokens: 8192,
-            imageConfig,
-          },
-          sessionId,
-          // No tools, no systemInstruction, no safetySettings for image gen
-        },
+        requestId: buildIdeRequestId({ body, request, credentials, model: cleanModel, requestType: "image_gen" }),
+        request,
       };
     }
 
@@ -177,8 +197,19 @@ export class AntigravityExecutor extends BaseExecutor {
         if (p.thoughtSignature && !p.functionCall && !p.text) return false;
         return true;
       });
-      if (role !== c.role || parts?.length !== c.parts?.length) {
-        return { ...c, role, parts };
+      // Gemini 3+ rejects functionCall parts without thoughtSignature. Clients (Claude Code, IDE)
+      // don't persist thoughtSignature in their history, so backfill the default signature on any
+      // functionCall part that arrives without one.
+      const needsBackfill = parts?.some(p => p.functionCall && !p.thoughtSignature) ?? false;
+      if (role !== c.role || parts?.length !== c.parts?.length || needsBackfill) {
+        return {
+          ...c, role,
+          parts: needsBackfill
+            ? parts.map(p => (p.functionCall && !p.thoughtSignature)
+                ? { ...p, thoughtSignature: DEFAULT_THINKING_AG_SIGNATURE }
+                : p)
+            : parts,
+        };
       }
       return c;
     });
@@ -188,15 +219,22 @@ export class AntigravityExecutor extends BaseExecutor {
 
     if (tools && tools.length > 0) {
       // Merge all groups into a single functionDeclarations group (Gemini expects 1 group)
-      const allDeclarations = tools.flatMap(group =>
-        (group.functionDeclarations || []).map(fn => ({
-          ...fn,
-          name: sanitizeFunctionName(fn.name),
-          parameters: fn.parameters
-            ? cleanJSONSchemaForAntigravity(structuredClone(fn.parameters))
-            : { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
-        }))
-      );
+      const seenToolNames = new Set();
+      const allDeclarations = [];
+      for (const group of tools) {
+        for (const fn of group.functionDeclarations || []) {
+          const name = sanitizeFunctionName(fn.name);
+          if (seenToolNames.has(name)) continue;
+          seenToolNames.add(name);
+          allDeclarations.push({
+            ...fn,
+            name,
+            parameters: fn.parameters
+              ? cleanJSONSchemaForAntigravity(structuredClone(fn.parameters))
+              : { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
+          });
+        }
+      }
       tools = allDeclarations.length > 0 ? [{ functionDeclarations: allDeclarations }] : [];
     }
 
@@ -229,7 +267,7 @@ export class AntigravityExecutor extends BaseExecutor {
       model: model,
       userAgent: "antigravity",
       requestType: "agent",
-      requestId: `agent-${crypto.randomUUID()}`,
+      requestId: buildIdeRequestId({ body, request: transformedRequest, credentials, model, requestType: "agent" }),
       request: transformedRequest
     };
   }
@@ -307,66 +345,66 @@ export class AntigravityExecutor extends BaseExecutor {
     return null;
   }
 
-   // Parse retry time from Antigravity error message body
-   // Format: "Your quota will reset after 2h7m23s" or "1h30m" or "45m" or "30s"
-   parseRetryFromErrorMessage(errorMessage) {
-     if (!errorMessage || typeof errorMessage !== "string") return null;
+  // Parse retry time from Antigravity error message body
+  // Format: "Your quota will reset after 2h7m23s" or "1h30m" or "45m" or "30s"
+  parseRetryFromErrorMessage(errorMessage) {
+    if (!errorMessage || typeof errorMessage !== "string") return null;
 
-     const match = errorMessage.match(/reset after (\d+h)?(\d+m)?(\d+s)?/i);
-     if (!match) return null;
+    const match = errorMessage.match(/reset after (\d+h)?(\d+m)?(\d+s)?/i);
+    if (!match) return null;
 
-     let totalMs = 0;
-     if (match[1]) totalMs += parseInt(match[1]) * 3600 * 1000; // hours
-     if (match[2]) totalMs += parseInt(match[2]) * 60 * 1000; // minutes
-     if (match[3]) totalMs += parseInt(match[3]) * 1000; // seconds
+    let totalMs = 0;
+    if (match[1]) totalMs += parseInt(match[1]) * 3600 * 1000; // hours
+    if (match[2]) totalMs += parseInt(match[2]) * 60 * 1000; // minutes
+    if (match[3]) totalMs += parseInt(match[3]) * 1000; // seconds
 
-     return totalMs > 0 ? totalMs : null;
-   }
+    return totalMs > 0 ? totalMs : null;
+  }
 
-   extractErrorMessage(errorJson, bodyText = "") {
-     return [
-       errorJson?.error?.message,
-       errorJson?.message,
-       errorJson?.error,
-       bodyText,
-     ].filter(Boolean).map(v => typeof v === "string" ? v : JSON.stringify(v)).join("\n");
-   }
+  extractErrorMessage(errorJson, bodyText = "") {
+    return [
+      errorJson?.error?.message,
+      errorJson?.message,
+      errorJson?.error,
+      bodyText,
+    ].filter(Boolean).map(v => typeof v === "string" ? v : JSON.stringify(v)).join("\n");
+  }
 
-   isTransientAntigravityError(status, message) {
-     if (status === HTTP_STATUS.RATE_LIMITED) return true;
-     if (ANTIGRAVITY_TRANSIENT_STATUSES.has(status)) return true;
-     return ANTIGRAVITY_TRANSIENT_ERROR_PATTERNS.some(pattern => pattern.test(message || ""));
-   }
+  isTransientAntigravityError(status, message) {
+    if (status === HTTP_STATUS.RATE_LIMITED) return true;
+    if (ANTIGRAVITY_TRANSIENT_STATUSES.has(status)) return true;
+    return ANTIGRAVITY_TRANSIENT_ERROR_PATTERNS.some(pattern => pattern.test(message || ""));
+  }
 
-   // Hook called by BaseExecutor.tryRetry: derive delay from Retry-After (header → body),
-   // cap at MAX_RETRY_AFTER_MS, else retry transient Antigravity failures with backoff.
-   // Return false to veto (fallback URL / final error).
-   async computeRetryDelay(response, attempt) {
-     let bodyText = "";
-     let errorJson = null;
-     let retryMs = this.parseRetryHeaders(response.headers);
+  // Hook called by BaseExecutor.tryRetry: derive delay from Retry-After (header → body),
+  // cap at MAX_RETRY_AFTER_MS, else retry transient Antigravity failures with backoff.
+  // Return false to veto (fallback URL / final error).
+  async computeRetryDelay(response, attempt) {
+    let bodyText = "";
+    let errorJson = null;
+    let retryMs = this.parseRetryHeaders(response.headers);
 
-     try {
-       bodyText = await response.clone().text();
-       errorJson = bodyText ? JSON.parse(bodyText) : null;
-     } catch {
-       // ignore parse errors → fall through to status/message based retry
-     }
+    try {
+      bodyText = await response.clone().text();
+      errorJson = bodyText ? JSON.parse(bodyText) : null;
+    } catch {
+      // ignore parse errors → fall through to status/message based retry
+    }
 
-     const errorMessage = this.extractErrorMessage(errorJson, bodyText);
+    const errorMessage = this.extractErrorMessage(errorJson, bodyText);
 
-     if (!retryMs) {
-       retryMs = this.parseRetryFromErrorMessage(errorMessage);
-     }
-     if (retryMs) return retryMs <= MAX_RETRY_AFTER_MS ? retryMs : false;
+    if (!retryMs) {
+      retryMs = this.parseRetryFromErrorMessage(errorMessage);
+    }
+    if (retryMs) return retryMs <= MAX_RETRY_AFTER_MS ? retryMs : false;
 
-     if (!this.isTransientAntigravityError(response.status, errorMessage)) return false;
+    if (!this.isTransientAntigravityError(response.status, errorMessage)) return false;
 
-     const cap = response.status === HTTP_STATUS.RATE_LIMITED
-       ? MAX_RETRY_AFTER_MS
-       : ANTIGRAVITY_TRANSIENT_RETRY_MAX_MS;
-     return Math.min(1000 * (2 ** attempt), cap); // exponential backoff
-   }
+    const cap = response.status === HTTP_STATUS.RATE_LIMITED
+      ? MAX_RETRY_AFTER_MS
+      : ANTIGRAVITY_TRANSIENT_RETRY_MAX_MS;
+    return Math.min(1000 * (2 ** attempt), cap); // exponential backoff
+  }
 
   /**
    * Cloak tools before sending to Antigravity provider (anti-ban):

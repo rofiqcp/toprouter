@@ -132,7 +132,7 @@ export default function CoworkToolCard({
     try {
       const keyToUse = selectedApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
-        || (!cloudEnabled ? "sk_toprouter" : null);
+        || (!cloudEnabled ? "sk_9router" : null);
 
       const res = await fetch(ENDPOINT, {
         method: "POST",
@@ -228,7 +228,7 @@ export default function CoworkToolCard({
   const getManualConfigs = () => {
     const keyToUse = (selectedApiKey && selectedApiKey.trim())
       ? selectedApiKey
-      : (!cloudEnabled ? "sk_toprouter" : "<API_KEY_FROM_DASHBOARD>");
+      : (!cloudEnabled ? "sk_9router" : "<API_KEY_FROM_DASHBOARD>");
 
     const modelsToShow = selectedModels.length > 0 ? selectedModels : ["provider/model-id"];
     const cfg = {
@@ -249,7 +249,7 @@ export default function CoworkToolCard({
       <div className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center" onClick={onToggle}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="size-8 flex items-center justify-center shrink-0">
-            <Image src={tool.image} alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} />
+            <Image src={tool.image} alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} loading="lazy" decoding="async" />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -514,27 +514,31 @@ export default function CoworkToolCard({
         configs={getManualConfigs()}
       />
 
-      <ComboFormModal
-        isOpen={comboModalOpen}
-        combo={null}
-        onClose={() => setComboModalOpen(false)}
-        onSave={handleCreateCombo}
-        activeProviders={activeProviders}
-        forcePrefix="claude-"
-        title="Create Cowork Combo"
-      />
+      {comboModalOpen && (
+        <ComboFormModal
+          isOpen={comboModalOpen}
+          combo={null}
+          onClose={() => setComboModalOpen(false)}
+          onSave={handleCreateCombo}
+          activeProviders={activeProviders}
+          forcePrefix="claude-"
+          title="Create Cowork Combo"
+        />
+      )}
 
-      <ModelSelectModal
-        isOpen={modelSelectOpen}
-        onClose={() => setModelSelectOpen(false)}
-        onSelect={handleAddModel}
-        onDeselect={handleRemoveModel}
-        activeProviders={activeProviders}
-        modelAliases={modelAliases}
-        title="Select Cowork Model"
-        addedModelValues={selectedModels}
-        closeOnSelect={false}
-      />
+      {modelSelectOpen && (
+        <ModelSelectModal
+          isOpen={modelSelectOpen}
+          onClose={() => setModelSelectOpen(false)}
+          onSelect={handleAddModel}
+          onDeselect={handleRemoveModel}
+          activeProviders={activeProviders}
+          modelAliases={modelAliases}
+          title="Select Cowork Model"
+          addedModelValues={selectedModels}
+          closeOnSelect={false}
+        />
+      )}
 
       <McpMarketplaceModal
         isOpen={marketplaceOpen}

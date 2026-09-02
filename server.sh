@@ -39,6 +39,21 @@ build_app() {
     cd "$APP_DIR"
     npm run build
     if [ $? -eq 0 ]; then echo -e "   ${GREEN}✓${NC} Build berhasil"; else echo -e "   ${RED}✗${NC} Build gagal"; exit 1; fi
+    # Next standalone does NOT copy static/public assets automatically — copy them
+    # so the production server can serve /_next/static/* and /favicon.svg, /icons/*.
+    if [ -d "$APP_DIR/.next/static" ]; then
+        cp -r "$APP_DIR/.next/static" "$APP_DIR/.next/standalone/.next/static"
+        echo -e "   ${GREEN}✓${NC} Copied static assets to standalone"
+    fi
+    if [ -d "$APP_DIR/.next/server" ]; then
+        cp -r "$APP_DIR/.next/server" "$APP_DIR/.next/standalone/.next/server"
+        echo -e "   ${GREEN}✓${NC} Copied server assets to standalone"
+    fi
+    if [ -d "$APP_DIR/public" ]; then
+        rm -rf "$APP_DIR/.next/standalone/public"
+        cp -r "$APP_DIR/public" "$APP_DIR/.next/standalone/public"
+        echo -e "   ${GREEN}✓${NC} Copied public assets to standalone"
+    fi
 }
 
 do_start_services() {

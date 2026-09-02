@@ -41,11 +41,10 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
   }, [initialStatus]);
 
   useEffect(() => {
-    if (isExpanded && !status) {
-      checkStatus();
+    if (isExpanded) {
+      if (!status) checkStatus();
       fetchModelAliases();
     }
-    if (isExpanded) fetchModelAliases();
   }, [isExpanded]);
 
   // Sync models from existing config
@@ -58,8 +57,8 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
     }
 
     // Parse subagent settings from agent.explorer if exists
-    if (status?.config?.agent?.explorer?.model?.startsWith("toprouter/")) {
-      setSubagentModel(status.config.agent.explorer.model.replace("toprouter/", ""));
+    if (status?.config?.agent?.explorer?.model?.startsWith("9router/")) {
+      setSubagentModel(status.config.agent.explorer.model.replace("9router/", ""));
     }
   }, [status]);
 
@@ -77,7 +76,7 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
     try {
       const keyToUse = (selectedApiKey && selectedApiKey.trim())
         ? selectedApiKey
-        : (!cloudEnabled ? "sk_toprouter" : selectedApiKey);
+        : (!cloudEnabled ? "sk_9router" : selectedApiKey);
       const validActiveModel = models.includes(activeModel) ? activeModel : (models[0] || "");
       await fetch("/api/cli-tools/opencode-settings", {
         method: "POST",
@@ -99,7 +98,7 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
     if (!status?.installed) return null;
     if (!status.config) return "not_configured";
     if (!status.hasTopRouter) return "not_configured";
-    const url = status.config?.provider?.["toprouter"]?.options?.baseURL || "";
+    const url = status.config?.provider?.["9router"]?.options?.baseURL || "";
     return matchKnownEndpoint(url, { tunnelPublicUrl, tailscaleUrl }) ? "configured" : "other";
   };
 
@@ -131,7 +130,7 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
     try {
       const keyToUse = (selectedApiKey && selectedApiKey.trim())
         ? selectedApiKey
-        : (!cloudEnabled ? "sk_toprouter" : selectedApiKey);
+        : (!cloudEnabled ? "sk_9router" : selectedApiKey);
 
       const res = await fetch("/api/cli-tools/opencode-settings", {
         method: "POST",
@@ -184,7 +183,7 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
   const getManualConfigs = () => {
     const keyToUse = (selectedApiKey && selectedApiKey.trim())
       ? selectedApiKey
-      : (!cloudEnabled ? "sk_toprouter" : "<API_KEY_FROM_DASHBOARD>");
+      : (!cloudEnabled ? "sk_9router" : "<API_KEY_FROM_DASHBOARD>");
 
     const modelsToShow = selectedModels.length > 0 ? selectedModels : ["provider/model-id"];
     const activeModelToShow = activeModel || selectedModels[0] || modelsToShow[0];
@@ -199,18 +198,18 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
       filename: "~/.config/opencode/opencode.json",
       content: JSON.stringify({
         provider: {
-          "toprouter": {
+          "9router": {
             npm: "@ai-sdk/openai-compatible",
             options: { baseURL: getEffectiveBaseUrl(), apiKey: keyToUse },
             models: modelsObj,
           },
         },
-        model: `toprouter/${activeModelToShow}`,
+        model: `9router/${activeModelToShow}`,
         agent: {
           explorer: {
             description: "Fast explorer subagent for codebase exploration",
             mode: "subagent",
-            model: `toprouter/${effectiveSubagentModel}`
+            model: `9router/${effectiveSubagentModel}`
           }
         }
       }, null, 2),
@@ -222,7 +221,7 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
       <div className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center" onClick={onToggle}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="size-8 flex items-center justify-center shrink-0">
-            <Image src="/providers/opencode.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} />
+            <Image src="/providers/opencode.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} loading="lazy" decoding="async" />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -253,7 +252,7 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
                   <span className="material-symbols-outlined text-yellow-500">warning</span>
                   <div className="flex-1">
                     <p className="font-medium text-yellow-600 dark:text-yellow-400">OpenCode CLI not detected locally</p>
-                    <p className="text-sm text-text-muted">Manual configuration is still available if toprouter is deployed on a remote server.</p>
+                    <p className="text-sm text-text-muted">Manual configuration is still available if 9router is deployed on a remote server.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pl-9">
@@ -302,12 +301,12 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
                 </div>
 
                 {/* Current configured */}
-                {status?.config?.provider?.["toprouter"]?.options?.baseURL && (
+                {status?.config?.provider?.["9router"]?.options?.baseURL && (
                   <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
                     <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Current</span>
                     <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                     <span className="min-w-0 truncate rounded bg-surface/40 px-2 py-2 text-xs text-text-muted sm:py-1.5">
-                      {status.config.provider["toprouter"].options.baseURL}
+                      {status.config.provider["9router"].options.baseURL}
                     </span>
                   </div>
                 )}
@@ -452,42 +451,46 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
         </div>
       )}
 
-      <ModelSelectModal
-        isOpen={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          saveModels(selectedModelsRef.current);
-        }}
-        onSelect={(model) => {
-          if (!selectedModels.includes(model.value)) {
-            setSelectedModels([...selectedModels, model.value]);
-            if (!activeModel) setActiveModel(model.value);
-          }
-        }}
-        onDeselect={(model) => {
-          const remaining = selectedModels.filter(m => m !== model.value);
-          setSelectedModels(remaining);
-          if (activeModel === model.value) {
-            setActiveModel(remaining[0] || "");
-          }
-        }}
-        selectedModel={null}
-        activeProviders={activeProviders}
-        modelAliases={modelAliases}
-        addedModelValues={selectedModels}
-        closeOnSelect={false}
-        title="Add Model for OpenCode"
-      />
+      {modalOpen && (
+        <ModelSelectModal
+          isOpen={modalOpen}
+          onClose={() => {
+            setModalOpen(false);
+            saveModels(selectedModelsRef.current);
+          }}
+          onSelect={(model) => {
+            if (!selectedModels.includes(model.value)) {
+              setSelectedModels([...selectedModels, model.value]);
+              if (!activeModel) setActiveModel(model.value);
+            }
+          }}
+          onDeselect={(model) => {
+            const remaining = selectedModels.filter(m => m !== model.value);
+            setSelectedModels(remaining);
+            if (activeModel === model.value) {
+              setActiveModel(remaining[0] || "");
+            }
+          }}
+          selectedModel={null}
+          activeProviders={activeProviders}
+          modelAliases={modelAliases}
+          addedModelValues={selectedModels}
+          closeOnSelect={false}
+          title="Add Model for OpenCode"
+        />
+      )}
 
-      <ModelSelectModal
-        isOpen={subagentModalOpen}
-        onClose={() => setSubagentModalOpen(false)}
-        onSelect={(model) => { setSubagentModel(model.value); setSubagentModalOpen(false); }}
-        selectedModel={subagentModel}
-        activeProviders={activeProviders}
-        modelAliases={modelAliases}
-        title="Select Subagent Model for OpenCode"
-      />
+      {subagentModalOpen && (
+        <ModelSelectModal
+          isOpen={subagentModalOpen}
+          onClose={() => setSubagentModalOpen(false)}
+          onSelect={(model) => { setSubagentModel(model.value); setSubagentModalOpen(false); }}
+          selectedModel={subagentModel}
+          activeProviders={activeProviders}
+          modelAliases={modelAliases}
+          title="Select Subagent Model for OpenCode"
+        />
+      )}
 
       <ManualConfigModal
         isOpen={showManualConfigModal}

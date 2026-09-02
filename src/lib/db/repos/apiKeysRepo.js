@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
+import { verifyAccessToken } from "../../oauth/server/oauthServer.js";
 
 function rowToKey(row) {
   if (!row) return null;
@@ -68,6 +69,30 @@ export async function deleteApiKey(id) {
 }
 
 export async function validateApiKey(key) {
+  if (!key) return false;
+  // OAuth access token (stateless JWT issued by TopRouter's device flow) is
+  // accepted as a first-class credential so headless clients (Hermes, etc.)
+  // can call /v1 with `Authorization: Bearer <oauth-jwt>`.
+  const oauthPayload = await validateOAuthAccessToken(key);
+  if (oauthPayload) return true;
+  return await validateStaticApiKey(key);
+}
+
+/**
+ * Accept an OAuth access token (JWT from TopRouter's device authorization
+ * server). Returns the decoded payload or null when invalid/expired.
+ */
+export async function validateOAuthAccessToken(key) {
+  if (!key) return null;
+  try {
+    const payload = await verifyAccessToken(key);
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export async function validateStaticApiKey(key) {
   const db = await getAdapter();
   const row = await db.get(`SELECT isActive FROM apiKeys WHERE key = ?`, [key]);
   if (!row) return false;

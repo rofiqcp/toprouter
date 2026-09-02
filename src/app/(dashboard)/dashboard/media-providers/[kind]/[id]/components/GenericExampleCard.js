@@ -39,14 +39,13 @@ export function GenericExampleCard({ providerId, kind }) {
   // Get models for this kind (e.g., type="image")
   const kindModels = getModelsByProviderId(providerId).filter((m) => getModelKind(m) === kind);
   // Kinds that need a model identifier in the request (image/video/music)
-  const KIND_NEEDS_MODEL = new Set(["image", "imageEdit", "video", "music", "imageToText"]);
+  const KIND_NEEDS_MODEL = new Set(["image", "video", "music", "imageToText"]);
   const needsModel = KIND_NEEDS_MODEL.has(kind);
   const allowManualModel = needsModel && kindModels.length === 0;
   const [selectedModel, setSelectedModel] = useState(kindModels[0]?.id ?? "");
   const selectedModelObj = kindModels.find((m) => m.id === selectedModel);
   const supportsEdit = !!selectedModelObj?.capabilities?.includes("edit");
   const supportsMask = !!selectedModelObj?.capabilities?.includes("mask");
-  const isImageEditKind = kind === "imageEdit";
 
   const [input, setInput] = useState(safeExConfig.defaultInput || "");
   const [refImage, setRefImage] = useState("");
@@ -117,12 +116,12 @@ export function GenericExampleCard({ providerId, kind }) {
     [exConfig.bodyKey]: input,
     ...exConfig.extraBody,
     ...extraBodyFromFields,
-    ...((supportsEdit || isImageEditKind) && effectiveRefImage ? { image: effectiveRefImage } : {}),
+    ...(supportsEdit && effectiveRefImage ? { image: effectiveRefImage } : {}),
     ...(supportsMask && effectiveMaskImage ? { mask_image: effectiveMaskImage } : {}),
   };
 
   // Streaming supported for codex image (Plus/Pro accounts) — disabled when binary output requested
-  const wantBinary = (kind === "image" || kind === "imageEdit") && imageOutputFormat === "binary";
+  const wantBinary = kind === "image" && imageOutputFormat === "binary";
   const useStreaming = kind === "image" && providerId === "codex" && !wantBinary;
   const apiPathWithQuery = `${apiPath}${wantBinary ? "?response_format=binary" : ""}`;
   const headersPreview = `-H "Content-Type: application/json" \\\n  -H "Authorization: Bearer ${apiKey || "YOUR_KEY"}"${pinnedConnectionId ? ` \\\n  -H "x-connection-id: ${pinnedConnectionId}"` : ""}${useStreaming ? ` \\\n  -H "Accept: text/event-stream"` : ""}`;
@@ -324,48 +323,25 @@ export function GenericExampleCard({ providerId, kind }) {
         </Row>
 
         {/* Reference image (only for edit-capable image models) */}
-        {(supportsEdit || isImageEditKind) && (
+        {supportsEdit && (
           <Row label="Ref Image (URL)">
             <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    value={refImage}
-                    onChange={(e) => setRefImage(e.target.value)}
-                    placeholder={imageEditDefaults.image || "https://example.com/source.png"}
-                    className="w-full px-3 py-1.5 pr-7 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
-                  />
-                  {refImage && (
-                    <button
-                      type="button"
-                      onClick={() => setRefImage("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[14px]">close</span>
-                    </button>
-                  )}
-                </div>
-                <label className="shrink-0 flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-border bg-background hover:bg-sidebar cursor-pointer transition-colors">
-                  <span className="material-symbols-outlined text-[14px]">upload</span>
-                  Upload
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        const dataUrl = ev.target?.result;
-                        if (typeof dataUrl === "string") setRefImage(dataUrl);
-                      };
-                      reader.readAsDataURL(file);
-                      // Reset so same file can be re-selected
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
+              <div className="relative">
+                <input
+                  value={refImage}
+                  onChange={(e) => setRefImage(e.target.value)}
+                  placeholder={imageEditDefaults.image || "https://example.com/source.png"}
+                  className="w-full px-3 py-1.5 pr-7 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
+                />
+                {refImage && (
+                  <button
+                    type="button"
+                    onClick={() => setRefImage("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                  </button>
+                )}
               </div>
               {refImagePreviewSrc && (
                 <img
@@ -374,6 +350,8 @@ export function GenericExampleCard({ providerId, kind }) {
                   className="max-h-40 rounded-lg border border-border object-contain bg-sidebar"
                   onError={(e) => { e.currentTarget.style.display = "none"; }}
                   onLoad={(e) => { e.currentTarget.style.display = "block"; }}
+                loading="lazy"
+                decoding="async"
                 />
               )}
             </div>
@@ -407,6 +385,8 @@ export function GenericExampleCard({ providerId, kind }) {
                   className="max-h-40 rounded-lg border border-border object-contain bg-sidebar"
                   onError={(e) => { e.currentTarget.style.display = "none"; }}
                   onLoad={(e) => { e.currentTarget.style.display = "block"; }}
+                loading="lazy"
+                decoding="async"
                 />
               )}
             </div>
@@ -450,7 +430,7 @@ export function GenericExampleCard({ providerId, kind }) {
         ))}
 
         {/* Output Format toggle (image only) — last */}
-        {(kind === "image" || kind === "imageEdit") && (
+        {kind === "image" && (
           <Row label="Output Format">
             <select
               value={imageOutputFormat}
@@ -511,6 +491,8 @@ export function GenericExampleCard({ providerId, kind }) {
               src={`data:image/png;base64,${partialImage.b64_json}`}
               alt="Partial"
               className="max-w-full rounded-lg border border-border mt-1.5 opacity-80"
+            loading="lazy"
+            decoding="async"
             />
           </div>
         )}
@@ -537,7 +519,7 @@ export function GenericExampleCard({ providerId, kind }) {
           <pre className="bg-sidebar rounded-lg px-3 py-2.5 text-xs font-mono text-text-main overflow-x-auto whitespace-pre-wrap break-all opacity-70">
             {result ? resultJson : exConfig.defaultResponse}
           </pre>
-          {(kind === "image" || kind === "imageEdit") && (binaryImageUrl || result?.data?.data?.[0]) && (
+          {kind === "image" && (binaryImageUrl || result?.data?.data?.[0]) && (
             <div className="mt-2">
               <div className="flex items-center justify-end mb-1.5">
                 <a
@@ -553,6 +535,8 @@ export function GenericExampleCard({ providerId, kind }) {
                 src={binaryImageUrl || (result?.data?.data?.[0]?.b64_json ? `data:image/png;base64,${result.data.data[0].b64_json}` : result?.data?.data?.[0]?.url)}
                 alt="Generated"
                 className="max-w-full rounded-lg border border-border"
+              loading="lazy"
+              decoding="async"
               />
             </div>
           )}

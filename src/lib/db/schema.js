@@ -82,6 +82,17 @@ export const TABLES = {
     },
     indexes: ["CREATE INDEX IF NOT EXISTS idx_ak_key ON apiKeys(key)"],
   },
+  oauthClients: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      name: "TEXT NOT NULL",
+      label: "TEXT",
+      isActive: "INTEGER DEFAULT 1",
+      createdAt: "TEXT NOT NULL",
+      lastUsedAt: "TEXT",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_oc_active ON oauthClients(isActive)"],
+  },
   combos: {
     columns: {
       id: "TEXT PRIMARY KEY",

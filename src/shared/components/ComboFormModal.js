@@ -1,45 +1,17 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import Modal from "./Modal";
 import Input from "./Input";
 import Button from "./Button";
 import ModelSelectModal from "./ModelSelectModal";
-import { getProviderAlias } from "@/shared/constants/providers";
-import { FREE_PROVIDERS } from "@/shared/constants/providers";
 
 const VALID_NAME_REGEX = /^[a-zA-Z0-9_.\-]+$/;
 
-// Build set of connected prefixes from active providers
-function buildConnectedPrefixes(activeProviders) {
-  const prefixes = new Set();
-  if (!activeProviders) return prefixes;
-  activeProviders.forEach(p => {
-    prefixes.add(p.provider);
-    prefixes.add(getProviderAlias(p.provider));
-    if (p.providerSpecificData?.prefix) prefixes.add(p.providerSpecificData.prefix);
-  });
-  // No-auth providers always connected
-  Object.keys(FREE_PROVIDERS).filter(id => FREE_PROVIDERS[id].noAuth).forEach(id => {
-    prefixes.add(id);
-    prefixes.add(getProviderAlias(id));
-  });
-  return prefixes;
-}
-
-function isModelStale(modelValue, connectedPrefixes) {
-  if (!modelValue || typeof modelValue !== "string") return false;
-  if (!modelValue.includes("/")) return false; // combo — always valid
-  const prefix = modelValue.split("/")[0];
-  return !connectedPrefixes.has(prefix);
-}
-
 // Inline editable model item
-function ModelItem({ index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown, onRemove, activeProviders }) {
+function ModelItem({ index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown, onRemove }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(model);
-  const connectedPrefixes = useMemo(() => buildConnectedPrefixes(activeProviders), [activeProviders]);
-  const stale = isModelStale(model, connectedPrefixes);
   const commit = () => {
     const trimmed = draft.trim();
     if (trimmed && trimmed !== model) onEdit(trimmed);
@@ -51,23 +23,14 @@ function ModelItem({ index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown
     if (e.key === "Escape") { setDraft(model); setEditing(false); }
   };
   return (
-    <div className={`group flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-black/[0.04] dark:bg-white/[0.02] dark:hover:bg-white/[0.04] ${stale ? "bg-amber-50 dark:bg-amber-900/10 border border-amber-300 dark:border-amber-700" : "bg-black/[0.02]"}`}
-      title={stale ? "Provider disconnected — no active connection" : undefined}>
+    <div className="group flex min-w-0 items-center gap-1.5 rounded-md bg-black/[0.02] px-2 py-1 transition-colors hover:bg-black/[0.04] dark:bg-white/[0.02] dark:hover:bg-white/[0.04]">
       <span className="text-[10px] font-medium text-text-muted w-3 text-center shrink-0">{index + 1}</span>
-      {stale && (
-        <span className="material-symbols-outlined text-amber-500 shrink-0" style={{ fontSize: "12px" }}>warning</span>
-      )}
       {editing ? (
         <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={handleKeyDown}
           className="min-w-0 flex-1 rounded border border-primary/40 bg-white px-1.5 py-0.5 font-mono text-xs text-text-main outline-none dark:bg-black/20" />
       ) : (
-        <div className={`min-w-0 flex-1 cursor-text truncate rounded px-1.5 py-0.5 font-mono text-xs ${stale ? "text-amber-700 dark:text-amber-300" : "text-text-main"} hover:bg-black/5 dark:hover:bg-white/5`}
-          onClick={() => setEditing(true)} title={stale ? "Provider disconnected" : "Click to edit"}>
-          {model}
-        </div>
-      )}
-      {stale && !editing && (
-        <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200/60 dark:bg-amber-800/40 text-amber-700 dark:text-amber-300 shrink-0 font-normal">disconnected</span>
+        <div className="min-w-0 flex-1 cursor-text truncate rounded px-1.5 py-0.5 font-mono text-xs text-text-main hover:bg-black/5 dark:hover:bg-white/5"
+          onClick={() => setEditing(true)} title="Click to edit">{model}</div>
       )}
       <div className="flex shrink-0 items-center gap-0.5">
         <button onClick={onMoveUp} disabled={isFirst}
@@ -87,7 +50,7 @@ function ModelItem({ index, model, isFirst, isLast, onEdit, onMoveUp, onMoveDown
 }
 
 // Reusable Combo create/edit modal. forcePrefix auto-prepends to name.
-export default function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindFilter = null, forcePrefix = "", title, modelAliases: propAliases = {} }) {
+export default function ComboFormModal({ isOpen, combo, onClose, onSave, activeProviders, kindFilter = null, forcePrefix = "", title }) {
   // Strip prefix when editing existing combo so user only edits suffix
   const initialName = combo?.name
     ? (forcePrefix && combo.name.startsWith(forcePrefix) ? combo.name.slice(forcePrefix.length) : combo.name)
@@ -97,15 +60,12 @@ export default function ComboFormModal({ isOpen, combo, onClose, onSave, activeP
   const [showModelSelect, setShowModelSelect] = useState(false);
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState("");
-  const [localAliases, setLocalAliases] = useState({});
-
-  const modelAliases = Object.keys(propAliases).length > 0 ? propAliases : localAliases;
+  const [modelAliases, setModelAliases] = useState({});
 
   useEffect(() => {
     if (!isOpen) return;
-    if (Object.keys(propAliases).length > 0) return;
-    fetch("/api/models/alias").then((r) => r.ok ? r.json() : null).then((d) => d && setLocalAliases(d.aliases || {})).catch(() => {});
-  }, [isOpen, propAliases]);
+    fetch("/api/models/alias").then((r) => r.ok ? r.json() : null).then((d) => d && setModelAliases(d.aliases || {})).catch(() => {});
+  }, [isOpen]);
 
   const validateName = (value) => {
     if (!value.trim()) { setNameError("Name is required"); return false; }
@@ -124,11 +84,9 @@ export default function ComboFormModal({ isOpen, combo, onClose, onSave, activeP
   };
 
   const handleAddModel = (model) => {
-    if (!model?.value) return;
     if (!models.includes(model.value)) setModels([...models, model.value]);
   };
   const handleDeselectModel = (model) => {
-    if (!model?.value) return;
     setModels(models.filter((m) => m !== model.value));
   };
   const handleRemoveModel = (i) => setModels(models.filter((_, idx) => idx !== i));
@@ -188,8 +146,7 @@ export default function ComboFormModal({ isOpen, combo, onClose, onSave, activeP
                     onEdit={(v) => { const a = [...models]; a[index] = v; setModels(a); }}
                     onMoveUp={() => handleMoveUp(index)}
                     onMoveDown={() => handleMoveDown(index)}
-                    onRemove={() => handleRemoveModel(index)}
-                    activeProviders={activeProviders} />
+                    onRemove={() => handleRemoveModel(index)} />
                 ))}
               </div>
             )}
@@ -209,11 +166,13 @@ export default function ComboFormModal({ isOpen, combo, onClose, onSave, activeP
         </div>
       </Modal>
 
-      <ModelSelectModal isOpen={showModelSelect} onClose={() => setShowModelSelect(false)}
-        onSelect={handleAddModel} onDeselect={handleDeselectModel}
-        activeProviders={activeProviders} modelAliases={modelAliases}
-        title="Add Model to Combo" kindFilter={kindFilter}
-        addedModelValues={models} closeOnSelect={false} />
+      {showModelSelect && (
+        <ModelSelectModal isOpen={showModelSelect} onClose={() => setShowModelSelect(false)}
+          onSelect={handleAddModel} onDeselect={handleDeselectModel}
+          activeProviders={activeProviders} modelAliases={modelAliases}
+          title="Add Model to Combo" kindFilter={kindFilter}
+          addedModelValues={models} closeOnSelect={false} />
+      )}
     </>
   );
 }

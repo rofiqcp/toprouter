@@ -143,6 +143,8 @@ export default function MitmToolCard({
                 className="size-8 object-contain rounded-lg"
                 sizes="32px"
                 onError={(e) => { e.target.style.display = "none"; }}
+              loading="lazy"
+              decoding="async"
               />
             </div>
             <div className="min-w-0">
@@ -181,7 +183,7 @@ export default function MitmToolCard({
             )}
             {/* Info */}
             <div className="flex flex-col gap-0.5 text-[11px] text-text-muted px-1">
-              <p>Toggle DNS to redirect {tool.name} traffic through 9Router via MITM.</p>
+              <p>Toggle DNS to redirect {tool.name} traffic through TopRouter via MITM.</p>
               {!dnsActive && (
                 <p className="text-amber-600 text-[10px] mt-1">
                   ⚠️ Enable DNS to edit model mappings
@@ -304,15 +306,17 @@ export default function MitmToolCard({
       )}
 
       {/* Model Select Modal */}
-      <ModelSelectModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSelect={handleModelSelect}
-        selectedModel={currentEditingAlias ? modelMappings[currentEditingAlias] : null}
-        activeProviders={activeProviders}
-        modelAliases={modelAliases}
-        title={`Select model for ${currentEditingAlias}`}
-      />
+      {modalOpen && (
+        <ModelSelectModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onSelect={handleModelSelect}
+          selectedModel={currentEditingAlias ? modelMappings[currentEditingAlias] : null}
+          activeProviders={activeProviders}
+          modelAliases={modelAliases}
+          title={`Select model for ${currentEditingAlias}`}
+        />
+      )}
     </>
   );
 }

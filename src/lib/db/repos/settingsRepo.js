@@ -16,6 +16,8 @@ const DEFAULT_SETTINGS = {
   comboStrategy: "fallback",
   comboStickyRoundRobinLimit: 1,
   comboStrategies: {},
+  // Provider-specific cooldown override (ms). Default 3 min.
+  providerCooldownMs: {},
   requireLogin: true,
   tunnelDashboardAccess: true,
   authMode: "password",

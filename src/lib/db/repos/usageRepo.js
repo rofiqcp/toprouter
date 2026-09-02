@@ -310,7 +310,7 @@ export async function getActiveRequests() {
     })
     .filter((e) => {
       if (e.promptTokens === 0 && e.completionTokens === 0) return false;
-      const minute = e.timestamp ? e.timestamp.slice(0, 16) : "";
+      const minute = e.timestamp ? new Date(e.timestamp).toISOString().slice(0, 16) : "";
       const key = `${e.model}|${e.provider}|${e.promptTokens}|${e.completionTokens}|${minute}`;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -468,7 +468,7 @@ export async function getUsageStats(period = "all") {
     })
     .filter((e) => {
       if (e.promptTokens === 0 && e.completionTokens === 0) return false;
-      const minute = e.timestamp ? e.timestamp.slice(0, 16) : "";
+      const minute = e.timestamp ? new Date(e.timestamp).toISOString().slice(0, 16) : "";
       const key = `${e.model}|${e.provider}|${e.promptTokens}|${e.completionTokens}|${minute}`;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -779,17 +779,17 @@ export async function getChartData(period = "7d") {
     const buckets = Array.from({ length: bucketCount }, (_, i) => ({ label: labelFn(startTime + i * bucketMs), tokens: 0, cost: 0 }));
 
     const aggRows = await db.all(
-      `SELECT CAST((EXTRACT(EPOCH FROM "timestamp"::timestamptz) / 3600) * 3600 AS BIGINT) * 1000 as hourBucketMs,
+      `SELECT CAST((EXTRACT(EPOCH FROM "timestamp"::timestamptz) / 3600) * 3600 AS BIGINT) * 1000 as "hourBucketMs",
               SUM(promptTokens) as promptTokens, SUM(completionTokens) as completionTokens, SUM(cost) as cost
        FROM usageHistory WHERE "timestamp" >= ? AND "timestamp" < ?
-       GROUP BY hourBucketMs`,
+       GROUP BY "hourBucketMs"`,
       [new Date(startTime).toISOString(), new Date(endTime).toISOString()]
     );
     for (const r of aggRows) {
-      const idx = Math.floor((r.hourBucketMs - startTime) / bucketMs);
+      const idx = Math.floor((Number(r.hourBucketMs) - startTime) / bucketMs);
       if (idx >= 0 && idx < bucketCount) {
-        buckets[idx].tokens += (r.promptTokens || 0) + (r.completionTokens || 0);
-        buckets[idx].cost += r.cost || 0;
+        buckets[idx].tokens += (Number(r.promptTokens) || 0) + (Number(r.completionTokens) || 0);
+        buckets[idx].cost += Number(r.cost) || 0;
       }
     }
     return buckets;
@@ -803,16 +803,16 @@ export async function getChartData(period = "7d") {
     const buckets = Array.from({ length: bucketCount }, (_, i) => ({ label: labelFn(startTime + i * bucketMs), tokens: 0, cost: 0 }));
 
     const aggRows = await db.all(
-      `SELECT CAST((EXTRACT(EPOCH FROM "timestamp"::timestamptz) / 3600) * 3600 AS BIGINT) * 1000 as hourBucketMs,
+      `SELECT CAST((EXTRACT(EPOCH FROM "timestamp"::timestamptz) / 3600) * 3600 AS BIGINT) * 1000 as "hourBucketMs",
               SUM(promptTokens) as promptTokens, SUM(completionTokens) as completionTokens, SUM(cost) as cost
        FROM usageHistory WHERE "timestamp" >= ? AND "timestamp" <= ?
-       GROUP BY hourBucketMs`,
+       GROUP BY "hourBucketMs"`,
       [new Date(startTime).toISOString(), new Date(now).toISOString()]
     );
     for (const r of aggRows) {
-      const idx = Math.min(Math.floor((r.hourBucketMs - startTime) / bucketMs), bucketCount - 1);
-      buckets[idx].tokens += (r.promptTokens || 0) + (r.completionTokens || 0);
-      buckets[idx].cost += r.cost || 0;
+      const idx = Math.min(Math.floor((Number(r.hourBucketMs) - startTime) / bucketMs), bucketCount - 1);
+      buckets[idx].tokens += (Number(r.promptTokens) || 0) + (Number(r.completionTokens) || 0);
+      buckets[idx].cost += Number(r.cost) || 0;
     }
     return buckets;
   }

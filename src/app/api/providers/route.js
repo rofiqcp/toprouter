@@ -126,9 +126,8 @@ export async function POST(request) {
 
     let providerSpecificData = normalizeProviderSpecificData(provider, body, body.providerSpecificData);
 
-    // Compatible/embedding nodes: enrich providerSpecificData from node metadata.
-    // Multiple connections (API keys) per node are supported — round-robin/fallback
-    // is handled by getProviderCredentials in auth.js.
+    // Compatible LLM nodes support multiple API-key connections (key pool); runtime
+    // rotates/fails over via getProviderCredentials. Embedding nodes stay single-connection.
     if (isOpenAICompatibleProvider(provider)) {
       const node = await getProviderNodeById(provider);
       if (!node) {
@@ -151,16 +150,16 @@ export async function POST(request) {
         nodeName: node.name,
       };
     } else if (isCustomEmbeddingProvider(provider)) {
-       const node = await getProviderNodeById(provider);
-       if (!node) {
-         return NextResponse.json({ error: "Custom Embedding node not found" }, { status: 404 });
-       }
-       providerSpecificData = {
-         prefix: node.prefix,
-         baseUrl: node.baseUrl,
-         nodeName: node.name,
-       };
-     }
+      const node = await getProviderNodeById(provider);
+      if (!node) {
+        return NextResponse.json({ error: "Custom Embedding node not found" }, { status: 404 });
+      }
+      providerSpecificData = {
+        prefix: node.prefix,
+        baseUrl: node.baseUrl,
+        nodeName: node.name,
+      };
+    }
 
     const mergedProviderSpecificData = {
       ...(providerSpecificData || {}),

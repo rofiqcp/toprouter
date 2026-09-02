@@ -1,0 +1,25 @@
+export default {
+  id: "kie",
+  priority: 65,
+  alias: "kie",
+  aliases: ["kie-ai"],
+  uiAlias: "kie",
+  display: {
+    name: "KIE AI",
+    icon: "image",
+    color: "#7C3AED",
+    textIcon: "KIE",
+    website: "https://kie.ai",
+    notice: { apiKeyUrl: "https://kie.ai" },
+  },
+  category: "apikey",
+  authType: "apikey",
+  modelsFetcher: "/api/providers/kie/models",
+  models: [],
+  serviceKinds: ["image"],
+  imageConfig: {
+    baseUrl: "https://api.kie.ai/api/v1/jobs/createTask",
+    pollUrl: "https://api.kie.ai/api/v1/jobs/recordInfo",
+    uploadUrl: "https://kieai.redpandaai.co/api/file-base64-upload",
+  },
+};

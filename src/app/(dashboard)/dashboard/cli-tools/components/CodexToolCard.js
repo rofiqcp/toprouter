@@ -34,11 +34,10 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   }, [initialStatus]);
 
   useEffect(() => {
-    if (isExpanded && !codexStatus) {
-      checkCodexStatus();
+    if (isExpanded) {
+      if (!codexStatus) checkCodexStatus();
       fetchModelAliases();
     }
-    if (isExpanded) fetchModelAliases();
   }, [isExpanded]);
 
   const fetchModelAliases = async () => {
@@ -98,10 +97,10 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
     setApplying(true);
     setMessage(null);
     try {
-      // Use sk_toprouter for localhost if no key, otherwise use selected key
+      // Use sk_9router for localhost if no key, otherwise use selected key
       const keyToUse = (selectedApiKey && selectedApiKey.trim())
         ? selectedApiKey
-        : (!cloudEnabled ? "sk_toprouter" : selectedApiKey);
+        : (!cloudEnabled ? "sk_9router" : selectedApiKey);
 
       const res = await fetch("/api/cli-tools/codex-settings", {
         method: "POST",
@@ -160,16 +159,16 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const getManualConfigs = () => {
     const keyToUse = (selectedApiKey && selectedApiKey.trim())
       ? selectedApiKey
-      : (!cloudEnabled ? "sk_toprouter" : "<API_KEY_FROM_DASHBOARD>");
+      : (!cloudEnabled ? "sk_9router" : "<API_KEY_FROM_DASHBOARD>");
 
     const effectiveSubagentModel = subagentModel || selectedModel;
 
-    const configContent = `# 9Router Configuration for Codex CLI
+    const configContent = `# TopRouter Configuration for Codex CLI
 model = "${selectedModel}"
-model_provider = "toprouter"
+model_provider = "9router"
 
-[model_providers.toprouter]
-name = "9Router"
+[model_providers.9router]
+name = "TopRouter"
 base_url = "${getEffectiveBaseUrl()}"
 wire_api = "responses"
 
@@ -199,7 +198,7 @@ model = "${effectiveSubagentModel}"
       <div className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center" onClick={onToggle}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="size-8 flex items-center justify-center shrink-0">
-            <Image src="/providers/codex.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} />
+            <Image src="/providers/codex.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} loading="lazy" decoding="async" />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -230,7 +229,7 @@ model = "${effectiveSubagentModel}"
                   <span className="material-symbols-outlined text-yellow-500">warning</span>
                   <div className="flex-1">
                     <p className="font-medium text-yellow-600 dark:text-yellow-400">Codex CLI not detected locally</p>
-                    <p className="text-sm text-text-muted">Manual configuration is still available if toprouter is deployed on a remote server.</p>
+                    <p className="text-sm text-text-muted">Manual configuration is still available if 9router is deployed on a remote server.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pl-9">
@@ -371,25 +370,29 @@ model = "${effectiveSubagentModel}"
         </div>
       )}
 
-      <ModelSelectModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSelect={handleModelSelect}
-        selectedModel={selectedModel}
-        activeProviders={activeProviders}
-        modelAliases={modelAliases}
-        title="Select Model for Codex"
-      />
+      {modalOpen && (
+        <ModelSelectModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onSelect={handleModelSelect}
+          selectedModel={selectedModel}
+          activeProviders={activeProviders}
+          modelAliases={modelAliases}
+          title="Select Model for Codex"
+        />
+      )}
 
-      <ModelSelectModal
-        isOpen={subagentModalOpen}
-        onClose={() => setSubagentModalOpen(false)}
-        onSelect={(model) => { setSubagentModel(model.value); setSubagentModalOpen(false); }}
-        selectedModel={subagentModel}
-        activeProviders={activeProviders}
-        modelAliases={modelAliases}
-        title="Select Subagent Model for Codex"
-      />
+      {subagentModalOpen && (
+        <ModelSelectModal
+          isOpen={subagentModalOpen}
+          onClose={() => setSubagentModalOpen(false)}
+          onSelect={(model) => { setSubagentModel(model.value); setSubagentModalOpen(false); }}
+          selectedModel={subagentModel}
+          activeProviders={activeProviders}
+          modelAliases={modelAliases}
+          title="Select Subagent Model for Codex"
+        />
+      )}
 
       <ManualConfigModal
         isOpen={showManualConfigModal}

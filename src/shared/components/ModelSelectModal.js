@@ -28,19 +28,11 @@ export default function ModelSelectModal({
   selectedModel,
   activeProviders = [],
   title = "Select Model",
-  modelAliases: propModelAliases = {},
+  modelAliases = {},
   kindFilter = null,
   addedModelValues = [],
   closeOnSelect = true,
 }) {
-  // Self-fetch aliases as fallback to handle race conditions and stale parent state
-  const [fetchedAliases, setFetchedAliases] = useState({});
-  useEffect(() => {
-    if (isOpen && Object.keys(propModelAliases).length === 0) {
-      fetch("/api/models/alias").then(r => r.ok ? r.json() : null).then(d => d && setFetchedAliases(d.aliases || {})).catch(() => {});
-    }
-  }, [isOpen, propModelAliases]);
-  const modelAliases = Object.keys(propModelAliases).length > 0 ? propModelAliases : fetchedAliases;
   // Filter activeProviders by serviceKinds when kindFilter set (e.g. "webSearch", "webFetch")
   const filteredActiveProviders = useMemo(() => {
     if (!kindFilter) return activeProviders;
@@ -56,6 +48,48 @@ export default function ModelSelectModal({
   const [providerNodes, setProviderNodes] = useState([]);
   const [customModels, setCustomModels] = useState([]);
   const [disabledModels, setDisabledModels] = useState({});
+  const [cursorModels, setCursorModels] = useState([]);
+
+  // Cursor exposes the usable catalog per account. Keep the static catalog only
+  // as a fallback, since it quickly becomes stale and different accounts can
+  // have different model entitlements.
+  const cursorConnectionIds = useMemo(
+    () => activeProviders
+      .filter((provider) => provider.provider === "cursor" && provider.id)
+      .map((provider) => provider.id),
+    [activeProviders],
+  );
+
+  useEffect(() => {
+    if (!isOpen || cursorConnectionIds.length === 0) {
+      setCursorModels([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    Promise.all(cursorConnectionIds.map(async (connectionId) => {
+      const response = await fetch(`/api/providers/${connectionId}/models`, { cache: "no-store" });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data.models) ? data.models : [];
+    }))
+      .then((modelLists) => {
+        if (cancelled) return;
+        const seen = new Set();
+        setCursorModels(modelLists.flat().filter((model) => {
+          if (!model?.id || seen.has(model.id)) return false;
+          seen.add(model.id);
+          return true;
+        }));
+      })
+      .catch((error) => {
+        // Do not hide the static fallback when the account catalog is unavailable.
+        console.warn("Unable to load Cursor models for selector:", error);
+        if (!cancelled) setCursorModels([]);
+      });
+
+    return () => { cancelled = true; };
+  }, [isOpen, cursorConnectionIds]);
 
   const fetchCombos = async () => {
     try {
@@ -190,7 +224,7 @@ export default function ModelSelectModal({
             value: fullModel,
           }));
         const customRegisteredModels = customModels
-          .filter((m) => m && m.providerAlias === alias)
+          .filter((m) => m.providerAlias === alias)
           .map((m) => ({
             id: m.id,
             name: m.name || m.id,
@@ -257,25 +291,21 @@ export default function ModelSelectModal({
             value: `${nodePrefix}/${fullModel.replace(`${providerId}/`, "")}`,
           }));
 
-        // Also include custom models registered via /api/models/custom (Add Model button)
-        const customRegisteredForProvider = customModels
-          .filter((m) => m && m.providerAlias === providerId)
+        // Merge custom models registered via /api/models/custom for this provider
+        // providerAlias in DB uses the raw providerId, not the display prefix
+        const registeredCustom = customModels
+          .filter((m) => m.providerAlias === providerId)
           .map((m) => ({
             id: m.id,
             name: m.name || m.id,
             value: `${nodePrefix}/${m.id}`,
             isCustom: true,
           }));
+        const seen = new Set(nodeModels.map((m) => m.value));
+        const mergedModels = [...nodeModels, ...registeredCustom.filter((m) => !seen.has(m.value))];
 
-        // Merge aliases + custom registered, dedupe by value
-        const seenValues = new Set(nodeModels.map((m) => m.value));
-        const mergedModels = [
-          ...nodeModels,
-          ...customRegisteredForProvider.filter((m) => !seenValues.has(m.value)),
-        ];
-
-        // Always show compatible providers that are connected, even with no models.
-        // When no models exist, show a placeholder so users know it's available.
+        // Always show compatible providers that are connected, even with no aliases.
+        // When no aliases exist, show a placeholder so users know it's available.
         const modelsToShow = mergedModels.length > 0 ? mergedModels : [{
           id: `__placeholder__${providerId}`,
           name: `${nodePrefix}/model-id`,
@@ -292,7 +322,9 @@ export default function ModelSelectModal({
           hasModels: mergedModels.length > 0,
         };
       } else {
-        const hardcodedModels = getModelsByProviderId(providerId);
+        const hardcodedModels = providerId === "cursor" && cursorModels.length > 0
+          ? cursorModels
+          : getModelsByProviderId(providerId);
         const hardcodedIds = new Set(hardcodedModels.map((m) => m.id));
 
         // Custom models: if no hardcoded models (e.g. openrouter), show all aliases for this provider
@@ -312,7 +344,7 @@ export default function ModelSelectModal({
         // Custom models registered via /api/models/custom (provider "Add Model" button)
         const customAliasIds = new Set(customAliasModels.map((m) => m.id));
         const customRegisteredModels = customModels
-          .filter((m) => m && m.providerAlias === alias && !hardcodedIds.has(m.id) && !customAliasIds.has(m.id))
+          .filter((m) => m.providerAlias === alias && !hardcodedIds.has(m.id) && !customAliasIds.has(m.id))
           .map((m) => ({ id: m.id, name: m.name || m.id, value: `${alias}/${m.id}`, isCustom: true }));
 
         const merged = [
@@ -361,7 +393,7 @@ export default function ModelSelectModal({
     });
 
     return groups;
-  }, [filteredActiveProviders, modelAliases, allProviders, providerNodes, customModels, disabledModels, kindFilter, activeProviders]);
+  }, [filteredActiveProviders, modelAliases, allProviders, providerNodes, customModels, disabledModels, kindFilter, activeProviders, cursorModels]);
 
   // Filter combos by search query (and hide combos when kindFilter is set — combos are LLM-only by design)
   const filteredCombos = useMemo(() => {
@@ -376,37 +408,6 @@ export default function ModelSelectModal({
     const added = models.filter(m => addedModelValues.includes(m.value)).sort((a, b) => a.name.localeCompare(b.name));
     const rest = models.filter(m => !addedModelValues.includes(m.value)).sort((a, b) => a.name.localeCompare(b.name));
     return [...added, ...rest];
-  };
-
-  // Build a Set of all connected prefixes (provider IDs, aliases, node prefixes)
-  const connectedPrefixes = useMemo(() => {
-    const prefixes = new Set();
-    // Active provider connections
-    activeProviders.forEach(p => {
-      prefixes.add(p.provider);
-      prefixes.add(getProviderAlias(p.provider));
-      if (p.providerSpecificData?.prefix) prefixes.add(p.providerSpecificData.prefix);
-    });
-    // Provider nodes (custom providers)
-    providerNodes.forEach(n => {
-      prefixes.add(n.id);
-      if (n.prefix) prefixes.add(n.prefix);
-    });
-    // No-auth providers (always available)
-    NO_AUTH_PROVIDER_IDS.forEach(id => {
-      prefixes.add(id);
-      prefixes.add(getProviderAlias(id));
-    });
-    return prefixes;
-  }, [activeProviders, providerNodes]);
-
-  // Check if a model value's prefix has an active connection
-  const isModelStale = (modelValue) => {
-    if (!modelValue || typeof modelValue !== "string") return false;
-    // Combos don't have prefixes — always valid
-    if (!modelValue.includes("/")) return false;
-    const prefix = modelValue.split("/")[0];
-    return !connectedPrefixes.has(prefix);
   };
 
   // Filter models by search query
@@ -425,11 +426,6 @@ export default function ModelSelectModal({
         );
         if (models.length === 0 && !providerNameMatches) return;
       }
-      // Tag stale added models
-      models = models.map(m => ({
-        ...m,
-        isStale: isModelStale(m.value) && addedModelValues.includes(m.value),
-      }));
       filtered[providerId] = {
         ...group,
         models: sortModels(models),
@@ -437,22 +433,7 @@ export default function ModelSelectModal({
     });
 
     return filtered;
-  }, [groupedModels, searchQuery, addedModelValues, connectedPrefixes]);
-
-  // Stale added models: in addedModelValues but not visible in any group (provider disconnected)
-  const staleModels = useMemo(() => {
-    const allVisibleValues = new Set();
-    Object.values(filteredGroups).forEach(g => g.models.forEach(m => allVisibleValues.add(m.value)));
-    return addedModelValues
-      .filter(v => !allVisibleValues.has(v) && isModelStale(v))
-      .map(v => ({
-        id: v,
-        name: v,
-        value: v,
-        prefix: v.includes("/") ? v.split("/")[0] : "",
-        isStale: true,
-      }));
-  }, [addedModelValues, filteredGroups, connectedPrefixes]);
+  }, [groupedModels, searchQuery, addedModelValues]);
 
   const handleSelect = (model) => {
     const value = model?.value || model?.name || model;
@@ -542,33 +523,6 @@ export default function ModelSelectModal({
           </div>
         )}
 
-        {/* Stale/disconnected models section */}
-        {staleModels.length > 0 && (
-          <div>
-            <div className="flex items-center gap-1.5 mb-1.5 sticky top-0 bg-surface py-0.5">
-              <span className="material-symbols-outlined text-amber-500 text-[14px]">warning</span>
-              <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Disconnected</span>
-              <span className="text-[10px] text-text-muted">({staleModels.length})</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {staleModels.map((model) => (
-                <button
-                  key={model.value}
-                  onClick={() => handleSelect(model)}
-                  title="Provider connection removed — no active connection"
-                  className="px-2 py-1 rounded-xl text-xs font-medium transition-all border hover:cursor-pointer border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
-                >
-                  <span className="flex items-center gap-1">
-                    <span className="material-symbols-outlined leading-none text-amber-500" style={{ fontSize: "11px" }}>warning</span>
-                    {model.name}
-                    <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200/60 dark:bg-amber-800/40 text-amber-700 dark:text-amber-300 font-normal">disconnected</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Provider models */}
         {Object.entries(filteredGroups).map(([providerId, group]) => (
           <div key={providerId}>
@@ -593,32 +547,26 @@ export default function ModelSelectModal({
               {group.models.map((model) => {
                 const isSelected = selectedModel === model.value;
                 const isPlaceholder = model.isPlaceholder;
-                const isStale = model.isStale;
                 return (
                   <button
                     key={model.value}
                     onClick={() => handleSelect(model)}
-                    title={isPlaceholder ? "Select to pre-fill, then edit model ID in the input" : (isStale ? "Provider disconnected — no active connection" : undefined)}
+                    title={isPlaceholder ? "Select to pre-fill, then edit model ID in the input" : undefined}
                     className={`
                       px-2 py-1 rounded-xl text-xs font-medium transition-all border hover:cursor-pointer
                       ${isPlaceholder
                         ? "border-dashed border-border text-text-muted hover:border-primary/50 hover:text-primary bg-surface italic"
-                        : isStale
-                          ? "border-amber-400 bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
-                          : isSelected
-                            ? "bg-primary text-white border-primary"
-                            : addedModelValues.includes(model.value)
-                              ? "bg-primary border-primary text-white hover:bg-primary-hover"
-                              : "bg-surface border-border text-text-main hover:border-primary/50 hover:bg-primary/5"
+                        : isSelected
+                          ? "bg-primary text-white border-primary"
+                          : addedModelValues.includes(model.value)
+                            ? "bg-primary border-primary text-white hover:bg-primary-hover"
+                            : "bg-surface border-border text-text-main hover:border-primary/50 hover:bg-primary/5"
                       }
                     `}
                   >
                     <span className="flex items-center gap-1">
-                      {addedModelValues.includes(model.value) && !isPlaceholder && !isStale && (
+                      {addedModelValues.includes(model.value) && !isPlaceholder && (
                         <span className="material-symbols-outlined leading-none" style={{ fontSize: "10px" }}>check</span>
-                      )}
-                      {isStale && (
-                        <span className="material-symbols-outlined leading-none text-amber-500" style={{ fontSize: "11px" }}>warning</span>
                       )}
                       {isPlaceholder ? (
                         <>
@@ -631,16 +579,11 @@ export default function ModelSelectModal({
                           <span className="text-[9px] opacity-60 font-normal">custom</span>
                           <CapacityBadges caps={getCaps(model.value)} />
                         </>
-                      ) : isStale ? (
-                        <>{model.name}</>
                       ) : (
                         <>
                           {model.name}
                           <CapacityBadges caps={getCaps(model.value)} />
                         </>
-                      )}
-                      {isStale && (
-                        <span className="text-[9px] px-1 py-0.5 rounded bg-amber-200/60 dark:bg-amber-800/40 text-amber-700 dark:text-amber-300 font-normal">disconnected</span>
                       )}
                     </span>
                   </button>

@@ -30,11 +30,10 @@ export default function KiloToolCard({ tool, isExpanded, onToggle, baseUrl, apiK
   }, [initialStatus]);
 
   useEffect(() => {
-    if (isExpanded && !status) {
-      checkStatus();
+    if (isExpanded) {
+      if (!status) checkStatus();
       fetchModelAliases();
     }
-    if (isExpanded) fetchModelAliases();
   }, [isExpanded]);
 
   const fetchModelAliases = async () => {
@@ -80,7 +79,7 @@ export default function KiloToolCard({ tool, isExpanded, onToggle, baseUrl, apiK
     try {
       const keyToUse = (selectedApiKey && selectedApiKey.trim())
         ? selectedApiKey
-        : (!cloudEnabled ? "sk_toprouter" : selectedApiKey);
+        : (!cloudEnabled ? "sk_9router" : selectedApiKey);
 
       const res = await fetch("/api/cli-tools/kilo-settings", {
         method: "POST",
@@ -124,7 +123,7 @@ export default function KiloToolCard({ tool, isExpanded, onToggle, baseUrl, apiK
   const getManualConfigs = () => {
     const keyToUse = (selectedApiKey && selectedApiKey.trim())
       ? selectedApiKey
-      : (!cloudEnabled ? "sk_toprouter" : "<API_KEY_FROM_DASHBOARD>");
+      : (!cloudEnabled ? "sk_9router" : "<API_KEY_FROM_DASHBOARD>");
 
     return [{
       filename: "~/.local/share/kilo/auth.json",
@@ -144,7 +143,7 @@ export default function KiloToolCard({ tool, isExpanded, onToggle, baseUrl, apiK
       <div className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center" onClick={onToggle}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="size-8 flex items-center justify-center shrink-0">
-            <Image src="/providers/kilocode.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} />
+            <Image src="/providers/kilocode.png" alt={tool.name} width={32} height={32} className="size-8 object-contain rounded-lg" sizes="32px" onError={(e) => { e.target.style.display = "none"; }} loading="lazy" decoding="async" />
           </div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -174,7 +173,7 @@ export default function KiloToolCard({ tool, isExpanded, onToggle, baseUrl, apiK
                   <span className="material-symbols-outlined text-yellow-500">warning</span>
                   <div className="flex-1">
                     <p className="font-medium text-yellow-600 dark:text-yellow-400">Kilo Code not detected locally</p>
-                    <p className="text-sm text-text-muted">Manual configuration is still available if toprouter is deployed on a remote server.</p>
+                    <p className="text-sm text-text-muted">Manual configuration is still available if 9router is deployed on a remote server.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pl-9">
@@ -254,15 +253,17 @@ export default function KiloToolCard({ tool, isExpanded, onToggle, baseUrl, apiK
         </div>
       )}
 
-      <ModelSelectModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSelect={(model) => { setSelectedModel(model.value); setModalOpen(false); }}
-        selectedModel={selectedModel}
-        activeProviders={activeProviders}
-        modelAliases={modelAliases}
-        title="Select Model for Kilo Code"
-      />
+      {modalOpen && (
+        <ModelSelectModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onSelect={(model) => { setSelectedModel(model.value); setModalOpen(false); }}
+          selectedModel={selectedModel}
+          activeProviders={activeProviders}
+          modelAliases={modelAliases}
+          title="Select Model for Kilo Code"
+        />
+      )}
 
       <ManualConfigModal
         isOpen={showManualConfigModal}

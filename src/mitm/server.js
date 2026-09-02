@@ -9,7 +9,7 @@ const { execSync } = require("child_process");
 const { log, err, dumpRequest, createResponseDumper, clearDumpDir } = require("./logger");
 const { IS_DEV, LSOF_BIN, TARGET_HOSTS, URL_PATTERNS, MODEL_SYNONYMS, MODEL_PATTERNS, MODEL_NO_MAP, getToolForHost } = require("./config");
 const { DATA_DIR, MITM_DIR } = require("./paths");
-const { getCertForDomain } = require("./cert/generate");
+const { generateCert, getCertForDomain } = require("./cert/generate");
 const { getMitmAlias } = require("./dbReader");
 const { applyAntigravityIdeVersionOverride } = require("./antigravityIdeVersion");
 const LOCAL_PORT = 443;
@@ -57,6 +57,11 @@ function sniCallback(servername, cb) {
 
 let sslOptions;
 try {
+  if (!fs.existsSync(path.join(MITM_DIR, "rootCA.key")) || !fs.existsSync(path.join(MITM_DIR, "rootCA.crt"))) {
+    log("Root CA missing, generating...");
+    generateCert();
+  }
+
   const rootKey = fs.readFileSync(path.join(MITM_DIR, "rootCA.key"));
   const rootCert = fs.readFileSync(path.join(MITM_DIR, "rootCA.crt"));
   rootCAPem = rootCert.toString("utf8");
@@ -334,7 +339,7 @@ const server = https.createServer(sslOptions, async (req, res) => {
     const bodyBuffer = await collectBodyRaw(req);
     if (ENABLE_FILE_LOG) dumpRequest(req, bodyBuffer, "raw");
 
-    // Anti-loop: skip requests from 9Router
+    // Anti-loop: skip requests from TopRouter
     if (req.headers[INTERNAL_REQUEST_HEADER.name] === INTERNAL_REQUEST_HEADER.value) {
       return passthrough(req, res, bodyBuffer);
     }
@@ -404,14 +409,10 @@ function killPort(port) {
   }
 }
 
-try {
-  killPort(LOCAL_PORT);
-} catch (e) {
-  err(`Cannot kill process on port ${LOCAL_PORT}: ${e.message}`);
-  process.exit(1);
-}
+// Do not kill every listener on port 443: nginx may legitimately own 443 on
+// non-loopback interfaces. The loopback-only bind below fails safely with EADDRINUSE.
 
-server.listen(LOCAL_PORT, () => log(`🚀 Server ready on :${LOCAL_PORT}`));
+server.listen(LOCAL_PORT, "127.0.0.1", () => log(`🚀 Server ready on 127.0.0.1:${LOCAL_PORT}`));
 
 server.on("error", (e) => {
   if (e.code === "EADDRINUSE") err(`Port ${LOCAL_PORT} already in use`);

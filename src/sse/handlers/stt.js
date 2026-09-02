@@ -8,7 +8,6 @@ import { handleSttCore } from "open-sse/handlers/sttCore.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
-import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import * as log from "../utils/logger.js";
 
 // Providers requiring credentials for STT
@@ -73,15 +72,7 @@ export async function handleStt(request) {
 
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 
-    const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
-
-    const result = await handleSttCore({ provider, model, formData, credentials: refreshedCredentials, sttConfig: AI_PROVIDERS[provider]?.sttConfig, onCredentialsRefreshed: async (newCreds) => {
-      await updateProviderCredentials(credentials.connectionId, {
-        ...newCreds,
-        existingProviderSpecificData: credentials.providerSpecificData,
-        testStatus: "active"
-      });
-    }});
+    const result = await handleSttCore({ provider, model, formData, credentials, sttConfig: AI_PROVIDERS[provider]?.sttConfig });
 
     if (result.success) return result.response;
 

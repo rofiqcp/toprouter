@@ -1,9 +1,9 @@
 ---
 name: toprouter-chat
-description: Chat / code generation via 9Router using OpenAI /v1/chat/completions or Anthropic /v1/messages format with streaming + auto-fallback combos. Use when the user wants to ask an LLM, generate code, summarize text, or run prompts through 9Router.
+description: Chat / code generation via TopRouter using OpenAI /v1/chat/completions or Anthropic /v1/messages format with streaming + auto-fallback combos. Use when the user wants to ask an LLM, generate code, summarize text, or run prompts through TopRouter.
 ---
 
-# 9Router — Chat
+# TopRouter — Chat
 
 Requires `NINEROUTER_URL` (and `NINEROUTER_KEY` if auth enabled). See https://raw.githubusercontent.com/decolua/toprouter/refs/heads/master/skills/toprouter/SKILL.md for setup.
 

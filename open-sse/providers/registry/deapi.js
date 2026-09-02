@@ -1,0 +1,26 @@
+export default {
+  id: "deapi",
+  priority: 66,
+  alias: "deapi",
+  aliases: ["deapi-ai"],
+  uiAlias: "deapi",
+  display: {
+    name: "deAPI",
+    icon: "image",
+    color: "#0EA5E9",
+    textIcon: "DE",
+    website: "https://deapi.ai",
+    notice: { apiKeyUrl: "https://deapi.ai" },
+  },
+  category: "apikey",
+  authType: "apikey",
+  modelsFetcher: "/api/providers/deapi/models",
+  models: [],
+  serviceKinds: ["image"],
+  imageConfig: {
+    baseUrl: "https://api.deapi.ai/api/v1/client/txt2img",
+    imageToImageUrl: "https://api.deapi.ai/api/v1/client/prompt/image2image",
+    pollUrl: "https://api.deapi.ai/api/v1/client/request-status",
+    modelsUrl: "https://api.deapi.ai/api/v1/client/models?per_page=200",
+  },
+};

@@ -1,8 +1,6 @@
 import crypto from "crypto";
 
-// Generate a per-process random secret if API_KEY_SECRET env var is not set.
-// This prevents all deployments from sharing the same default secret.
-const API_KEY_SECRET = process.env.API_KEY_SECRET || crypto.randomBytes(32).toString("hex");
+const API_KEY_SECRET = process.env.API_KEY_SECRET || "endpoint-proxy-api-key-secret";
 
 /**
  * Generate 6-char random keyId

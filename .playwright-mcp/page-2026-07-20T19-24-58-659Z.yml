@@ -1,0 +1,243 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - link "hub TopRouter Proxy v0.5.40" [ref=e10] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e12]: hub
+        - generic [ref=e13]:
+          - heading "TopRouter Proxy" [level=1] [ref=e14]
+          - generic [ref=e15]: v0.5.40
+      - navigation [ref=e16]:
+        - link "api Endpoint & Key" [ref=e17] [cursor=pointer]:
+          - /url: /dashboard/endpoint
+          - generic [ref=e18]: api
+          - generic [ref=e19]: Endpoint & Key
+        - link "dns Providers" [ref=e20] [cursor=pointer]:
+          - /url: /dashboard/providers
+          - generic [ref=e21]: dns
+          - generic [ref=e22]: Providers
+        - link "layers Combos" [ref=e23] [cursor=pointer]:
+          - /url: /dashboard/combos
+          - generic [ref=e24]: layers
+          - generic [ref=e25]: Combos
+        - link "bar_chart Usage" [ref=e26] [cursor=pointer]:
+          - /url: /dashboard/usage
+          - generic [ref=e27]: bar_chart
+          - generic [ref=e28]: Usage
+        - link "data_usage Quota Tracker" [ref=e29] [cursor=pointer]:
+          - /url: /dashboard/quota
+          - generic [ref=e30]: data_usage
+          - generic [ref=e31]: Quota Tracker
+        - link "savings Token Saver" [ref=e32] [cursor=pointer]:
+          - /url: /dashboard/token-saver
+          - generic [ref=e33]: savings
+          - generic [ref=e34]: Token Saver
+        - link "terminal CLI Tools" [ref=e35] [cursor=pointer]:
+          - /url: /dashboard/cli-tools
+          - generic [ref=e36]: terminal
+          - generic [ref=e37]: CLI Tools
+        - generic [ref=e38]:
+          - paragraph [ref=e39]: System
+          - button "perm_media Media Providers expand_more" [ref=e40] [cursor=pointer]:
+            - generic [ref=e41]: perm_media
+            - generic [ref=e42]: Media Providers
+            - generic [ref=e43]: expand_more
+          - link "lan Proxy Pools" [ref=e44] [cursor=pointer]:
+            - /url: /dashboard/proxy-pools
+            - generic [ref=e45]: lan
+            - generic [ref=e46]: Proxy Pools
+          - link "extension Skills" [ref=e47] [cursor=pointer]:
+            - /url: /dashboard/skills
+            - generic [ref=e48]: extension
+            - generic [ref=e49]: Skills
+          - link "terminal Console Log" [ref=e50] [cursor=pointer]:
+            - /url: /dashboard/console-log
+            - generic [ref=e51]: terminal
+            - generic [ref=e52]: Console Log
+          - button "computer Remote" [ref=e53] [cursor=pointer]:
+            - generic [ref=e54]: computer
+            - generic [ref=e55]: Remote
+          - link "settings Settings" [ref=e56] [cursor=pointer]:
+            - /url: /dashboard/profile
+            - generic [ref=e57]: settings
+            - generic [ref=e58]: Settings
+    - main [ref=e59]:
+      - generic [ref=e60]:
+        - button "menu" [ref=e62] [cursor=pointer]:
+          - generic [ref=e63]: menu
+        - generic [ref=e66]:
+          - generic [ref=e67]: brush
+          - heading "Text to Image" [level=1] [ref=e68]
+        - generic [ref=e69]:
+          - button "Donate" [ref=e70] [cursor=pointer]:
+            - generic [ref=e71]: volunteer_activism
+            - generic [ref=e72]: Donate
+          - button "Switch to dark mode" [ref=e73] [cursor=pointer]:
+            - generic [ref=e74]: dark_mode
+          - button "🇺🇸" [ref=e75] [cursor=pointer]:
+            - generic [ref=e76]: 🇺🇸
+          - button "grid_view" [ref=e78] [cursor=pointer]:
+            - generic [ref=e79]: grid_view
+      - generic [ref=e83]:
+        - link "Antigravity Antigravity 7 Connected" [ref=e84] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/antigravity
+          - generic [ref=e86]:
+            - generic [ref=e87]:
+              - img "Antigravity" [ref=e89]
+              - generic [ref=e90]:
+                - heading "Antigravity" [level=3] [ref=e91]
+                - generic [ref=e93]: 7 Connected
+            - switch [checked] [ref=e97]
+        - link "OpenAI Codex OpenAI Codex 1 Connected" [ref=e98] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/codex
+          - generic [ref=e100]:
+            - generic [ref=e101]:
+              - img "OpenAI Codex" [ref=e103]
+              - generic [ref=e104]:
+                - heading "OpenAI Codex" [level=3] [ref=e105]
+                - generic [ref=e107]: 1 Connected
+            - switch [checked] [ref=e111]
+        - link "OpenAI OpenAI No connections" [ref=e112] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/openai
+          - generic [ref=e115]:
+            - img "OpenAI" [ref=e117]
+            - generic [ref=e118]:
+              - heading "OpenAI" [level=3] [ref=e119]
+              - generic [ref=e121]: No connections
+        - link "Gemini Gemini No connections" [ref=e122] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/gemini
+          - generic [ref=e125]:
+            - img "Gemini" [ref=e127]
+            - generic [ref=e128]:
+              - heading "Gemini" [level=3] [ref=e129]
+              - generic [ref=e131]: No connections
+        - link "Black Forest Labs Black Forest Labs No connections" [ref=e132] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/black-forest-labs
+          - generic [ref=e135]:
+            - img "Black Forest Labs" [ref=e137]
+            - generic [ref=e138]:
+              - heading "Black Forest Labs" [level=3] [ref=e139]
+              - generic [ref=e141]: No connections
+        - link "Cloudflare Cloudflare 1 Connected" [ref=e142] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/cloudflare-ai
+          - generic [ref=e144]:
+            - generic [ref=e145]:
+              - img "Cloudflare" [ref=e147]
+              - generic [ref=e148]:
+                - heading "Cloudflare" [level=3] [ref=e149]
+                - generic [ref=e151]: 1 Connected
+            - switch [checked] [ref=e155]
+        - link "Stability AI Stability AI No connections" [ref=e156] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/stability-ai
+          - generic [ref=e159]:
+            - img "Stability AI" [ref=e161]
+            - generic [ref=e162]:
+              - heading "Stability AI" [level=3] [ref=e163]
+              - generic [ref=e165]: No connections
+        - link "KIE AI KIE AI 1 Connected" [ref=e166] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/kie
+          - generic [ref=e168]:
+            - generic [ref=e169]:
+              - img "KIE AI" [ref=e171]
+              - generic [ref=e172]:
+                - heading "KIE AI" [level=3] [ref=e173]
+                - generic [ref=e175]: 1 Connected
+            - switch [checked] [ref=e179]
+        - link "deAPI deAPI 1 Connected" [ref=e180] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/deapi
+          - generic [ref=e182]:
+            - generic [ref=e183]:
+              - img "deAPI" [ref=e185]
+              - generic [ref=e186]:
+                - heading "deAPI" [level=3] [ref=e187]
+                - generic [ref=e189]: 1 Connected
+            - switch [checked] [ref=e193]
+        - link "HuggingFace HuggingFace No connections" [ref=e194] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/huggingface
+          - generic [ref=e197]:
+            - img "HuggingFace" [ref=e199]
+            - generic [ref=e200]:
+              - heading "HuggingFace" [level=3] [ref=e201]
+              - generic [ref=e203]: No connections
+        - link "Recraft Recraft No connections" [ref=e204] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/recraft
+          - generic [ref=e207]:
+            - img "Recraft" [ref=e209]
+            - generic [ref=e210]:
+              - heading "Recraft" [level=3] [ref=e211]
+              - generic [ref=e213]: No connections
+        - link "NanoBanana API NanoBanana API 1 Added" [ref=e214] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/nanobanana
+          - generic [ref=e216]:
+            - generic [ref=e217]:
+              - img "NanoBanana API" [ref=e219]
+              - generic [ref=e220]:
+                - heading "NanoBanana API" [level=3] [ref=e221]
+                - generic [ref=e223]: 1 Added
+            - switch [checked] [ref=e226]
+        - link "Runway ML Runway ML No connections" [ref=e227] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/runwayml
+          - generic [ref=e230]:
+            - img "Runway ML" [ref=e232]
+            - generic [ref=e233]:
+              - heading "Runway ML" [level=3] [ref=e234]
+              - generic [ref=e236]: No connections
+        - link "Fal.ai Fal.ai No connections" [ref=e237] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/fal-ai
+          - generic [ref=e240]:
+            - img "Fal.ai" [ref=e242]
+            - generic [ref=e243]:
+              - heading "Fal.ai" [level=3] [ref=e244]
+              - generic [ref=e246]: No connections
+        - link "Minimax Coding Minimax Coding No connections" [ref=e247] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/minimax
+          - generic [ref=e250]:
+            - img "Minimax Coding" [ref=e252]
+            - generic [ref=e253]:
+              - heading "Minimax Coding" [level=3] [ref=e254]
+              - generic [ref=e256]: No connections
+        - link "SD WebUI SD WebUI No connections" [ref=e257] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/sdwebui
+          - generic [ref=e260]:
+            - img "SD WebUI" [ref=e262]
+            - generic [ref=e263]:
+              - heading "SD WebUI" [level=3] [ref=e264]
+              - generic [ref=e266]: No connections
+        - link "Venice AI Venice AI No connections" [ref=e267] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/venice
+          - generic [ref=e270]:
+            - img "Venice AI" [ref=e272]
+            - generic [ref=e273]:
+              - heading "Venice AI" [level=3] [ref=e274]
+              - generic [ref=e276]: No connections
+        - link "ComfyUI ComfyUI No connections" [ref=e277] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/comfyui
+          - generic [ref=e280]:
+            - img "ComfyUI" [ref=e282]
+            - generic [ref=e283]:
+              - heading "ComfyUI" [level=3] [ref=e284]
+              - generic [ref=e286]: No connections
+        - link "Vercel AI Gateway Vercel AI Gateway No connections" [ref=e287] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/vercel-ai-gateway
+          - generic [ref=e290]:
+            - img "Vercel AI Gateway" [ref=e292]
+            - generic [ref=e293]:
+              - heading "Vercel AI Gateway" [level=3] [ref=e294]
+              - generic [ref=e296]: No connections
+        - link "xAI (Grok) xAI (Grok) 1 Error" [ref=e297] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/xai
+          - generic [ref=e299]:
+            - generic [ref=e300]:
+              - img "xAI (Grok)" [ref=e302]
+              - generic [ref=e303]:
+                - heading "xAI (Grok)" [level=3] [ref=e304]
+                - generic [ref=e306]: 1 Error
+            - switch [checked] [ref=e310]
+        - link "Topaz Topaz No connections" [ref=e311] [cursor=pointer]:
+          - /url: /dashboard/media-providers/image/topaz
+          - generic [ref=e314]:
+            - img "Topaz" [ref=e316]
+            - generic [ref=e317]:
+              - heading "Topaz" [level=3] [ref=e318]
+              - generic [ref=e320]: No connections
+  - alert [ref=e321]

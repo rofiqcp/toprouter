@@ -15,16 +15,14 @@ export default function DonateModal({ isOpen, onClose }) {
     if (!isOpen || data) return;
     setLoading(true);
     setError("");
-    const controller = new AbortController();
-    fetch(GITHUB_CONFIG.donateUrl, { cache: "no-store", signal: controller.signal })
+    fetch(GITHUB_CONFIG.donateUrl, { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((json) => setData(json))
-      .catch((err) => { if (err.name !== "AbortError") { setError(err.message || "Failed to load"); console.warn("[DonateModal] Failed to load donate info:", err.message); } })
+      .catch((err) => setError(err.message || "Failed to load"))
       .finally(() => setLoading(false));
-    return () => controller.abort();
   }, [isOpen, data]);
 
   useEffect(() => {
@@ -108,6 +106,8 @@ function DonateChannelCard({ channel }) {
           src={qr}
           alt={`${label} QR`}
           className="w-full max-w-[180px] aspect-square object-contain rounded-lg bg-white p-1"
+        loading="lazy"
+        decoding="async"
         />
       )}
     </>

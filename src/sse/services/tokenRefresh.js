@@ -139,7 +139,6 @@ function _refreshProjectId(provider, connectionId, accessToken) {
           connectionId,
           error: err?.message ?? err,
         });
-        console.warn("[tokenRefresh] Failed to persist projectId for connection", connectionId, err?.message);
       });
     })
     .catch((err) => {
@@ -211,33 +210,15 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
 
 // ─── Local-specific: proactive token refresh ─────────────────────────────────
 
-// Per-connection mutex to prevent concurrent token refresh races
-const inflightRefreshes = new Map();
-
 /**
  * Check whether the provider token (and, for GitHub, the Copilot token) is
  * about to expire and refresh it proactively.
- * Concurrent calls for the same connectionId share a single in-flight refresh.
  *
  * @param {string} provider
  * @param {object} credentials
  * @returns {Promise<object>} updated credentials object
  */
 export async function checkAndRefreshToken(provider, credentials) {
-  const lockKey = credentials?.connectionId || credentials?.id || `${provider}:${credentials?.accessToken?.slice(0, 8)}`;
-  if (inflightRefreshes.has(lockKey)) {
-    return inflightRefreshes.get(lockKey);
-  }
-  const promise = _doCheckAndRefreshToken(provider, credentials);
-  inflightRefreshes.set(lockKey, promise);
-  try {
-    return await promise;
-  } finally {
-    inflightRefreshes.delete(lockKey);
-  }
-}
-
-async function _doCheckAndRefreshToken(provider, credentials) {
   let creds = { ...credentials };
   if (!creds.connectionId && creds.id) {
     creds.connectionId = creds.id;

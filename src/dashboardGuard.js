@@ -31,6 +31,14 @@ const PUBLIC_API_PATHS = [
   "/api/settings/require-login",
 ];
 
+// OAuth device-flow public endpoints (TopRouter as Device Authorization Server).
+// device_authorization + token are called by headless clients WITHOUT a dashboard
+// session; only the /api/oauth/server/* management endpoints require dashboard auth.
+const OAUTH_PUBLIC_PREFIXES = [
+  "/api/oauth/device_authorization",
+  "/api/oauth/token",
+];
+
 // Public top-level prefixes (LLM API endpoints with their own API key auth).
 const PUBLIC_PREFIXES = ["/v1", "/v1beta", "/api/v1", "/api/v1beta", "/codex"];
 
@@ -81,6 +89,7 @@ const LOCAL_ONLY_PATHS = [
   "/api/auth/reset-password",
   "/api/headroom/start",
   "/api/headroom/stop",
+  "/api/headroom/proxy",
 ];
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -199,6 +208,12 @@ export async function proxy(request) {
   if (isPublicLlmApi(pathname)) {
     if (await canAccessPublicLlmApi(request)) return NextResponse.next();
     return NextResponse.json({ error: "API key required for remote API access" }, { status: 401 });
+  }
+
+  // OAuth device-flow public endpoints — reachable by headless clients (Hermes)
+  // without a dashboard session. Handler enforces client_id validity itself.
+  if (OAUTH_PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next();
   }
 
   // Deny-by-default for /api/* — public allow-list bypasses, everything else requires auth.

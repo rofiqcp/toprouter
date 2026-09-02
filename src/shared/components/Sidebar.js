@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -13,7 +13,7 @@ import { ConfirmModal } from "./Modal";
 import NineRemotePromoModal from "./NineRemotePromoModal";
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
-const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageEdit", "tts", "stt", "video"];
+const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt"];
 // Combined entry: webSearch + webFetch share one page at /dashboard/media-providers/web
 const COMBINED_WEB_ITEM = { id: "web", label: "Web Fetch & Search", icon: "travel_explore", href: "/dashboard/media-providers/web" };
 
@@ -24,7 +24,8 @@ const navItems = [
   { href: "/dashboard/combos", label: "Combos", icon: "layers" },
   { href: "/dashboard/usage", label: "Usage", icon: "bar_chart" },
   { href: "/dashboard/quota", label: "Quota Tracker", icon: "data_usage" },
-  { href: "/dashboard/mitm", label: "MITM", icon: "security" },
+  { href: "/dashboard/token-saver", label: "Token Saver", icon: "savings" },
+  // { href: "/dashboard/pxpipe", label: "PXPIPE", icon: "image" },
   { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
 ];
 
@@ -49,16 +50,8 @@ export default function Sidebar({ onClose }) {
   const [shutdownCountdown, setShutdownCountdown] = useState(0);
   const [enableTranslator, setEnableTranslator] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
-  const shutdownTimerRef = useRef(null);
 
   const INSTALL_CMD = UPDATER_CONFIG.installCmdLatest;
-
-  // Cleanup shutdown timer on unmount
-  useEffect(() => {
-    return () => {
-      if (shutdownTimerRef.current) clearInterval(shutdownTimerRef.current);
-    };
-  }, []);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -94,13 +87,11 @@ export default function Sidebar({ onClose }) {
     copy(INSTALL_CMD);
     let remaining = UPDATER_CONFIG.shutdownCountdownSec;
     setShutdownCountdown(remaining);
-    if (shutdownTimerRef.current) clearInterval(shutdownTimerRef.current);
-    shutdownTimerRef.current = setInterval(() => {
+    const timer = setInterval(() => {
       remaining -= 1;
       setShutdownCountdown(remaining);
       if (remaining <= 0) {
-        clearInterval(shutdownTimerRef.current);
-        shutdownTimerRef.current = null;
+        clearInterval(timer);
         fetch("/api/version/shutdown", { method: "POST" }).catch(() => {});
         setIsDisconnected(true);
       }
@@ -108,10 +99,6 @@ export default function Sidebar({ onClose }) {
   };
 
   const handleCancelUpdate = () => {
-    if (shutdownTimerRef.current) {
-      clearInterval(shutdownTimerRef.current);
-      shutdownTimerRef.current = null;
-    }
     setIsUpdating(false);
     setShutdownCountdown(0);
   };
@@ -236,17 +223,18 @@ export default function Sidebar({ onClose }) {
                   </Link>
                 ))}
                 <Link
-                  href="/dashboard/media-providers/web"
+                  key={COMBINED_WEB_ITEM.id}
+                  href={COMBINED_WEB_ITEM.href}
                   onClick={onClose}
                   className={cn(
                     "flex items-center gap-3 px-4 py-1 rounded-lg transition-all group",
-                    pathname.startsWith("/dashboard/media-providers/web")
+                    pathname.startsWith(COMBINED_WEB_ITEM.href)
                       ? "bg-primary/10 text-primary"
                       : "text-text-muted hover:bg-surface-2 hover:text-text-main"
                   )}
                 >
-                  <span className="material-symbols-outlined text-[16px]">language</span>
-                  <span className="text-sm">Web Fetch & Search</span>
+                  <span className="material-symbols-outlined text-[16px]">{COMBINED_WEB_ITEM.icon}</span>
+                  <span className="text-sm">{COMBINED_WEB_ITEM.label}</span>
                 </Link>
               </div>
             )}
@@ -351,7 +339,7 @@ export default function Sidebar({ onClose }) {
         isOpen={showUpdateModal}
         onClose={() => setShowUpdateModal(false)}
         onConfirm={handleUpdate}
-        title="Update 9Router"
+        title="Update TopRouter"
         message={`Show install command for v${updateInfo?.latestVersion || ""}? You can copy it and shutdown to install manually.`}
         confirmText="Show Command"
         cancelText="Cancel"
@@ -402,11 +390,13 @@ function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdow
           <span className="material-symbols-outlined text-[24px]">content_copy</span>
         </div>
         <div>
-          <h2 className="text-lg font-semibold">Update TopRouter</h2>
-          <p className="text-xs text-text-muted">
-            {isCountingDown
-              ? `Command copied. Server will stop in ${countdown}s...`
-              : "Click the button below to copy the install command and shutdown."}
+          <h2 className="text-lg font-semibold">Update TopRouter{latestVersion ? ` to v${latestVersion}` : ""}</h2>
+          <p className="text-xs text-white/60">
+            {isDisconnected
+              ? "Server stopped. Paste the command into a terminal to install."
+              : isCountingDown
+                ? `Command copied. Server will stop in ${countdown}s...`
+                : "Click the button below to copy the install command and shutdown."}
           </p>
         </div>
       </div>
@@ -419,7 +409,7 @@ function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdow
       <ol className="text-xs text-white/70 space-y-1 list-decimal list-inside mb-4">
         <li>Click <strong>Copy & Shutdown</strong> below.</li>
         <li>Paste the command into your terminal and press Enter.</li>
-        <li>Run <code className="px-1 rounded bg-white/10 text-green-400">toprouter</code> again after install.</li>
+        <li>Run <code className="px-1 rounded bg-white/10 text-green-400">9router</code> again after install.</li>
       </ol>
 
       {isDisconnected ? (

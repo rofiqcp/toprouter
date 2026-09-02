@@ -73,3 +73,9 @@ ecosystem.config.*
 scripts/agSniffer/*
 gitbooks/*
 gitbook/README.md
+
+# Live state / credential stores — must never be committed
+# (contain API keys, OAuth tokens, usage data)
+database.json
+database.json.*
+*.bak

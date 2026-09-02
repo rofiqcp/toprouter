@@ -1,7 +1,7 @@
 export default function manifest() {
   return {
     name: 'TopRouter - AI Infrastructure Management',
-    short_name: '9Router',
+    short_name: 'TopRouter',
     description: 'One endpoint for all your AI providers. Manage keys, monitor usage, and scale effortlessly.',
     start_url: '/',
     display: 'standalone',

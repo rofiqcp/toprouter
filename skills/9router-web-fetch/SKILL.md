@@ -1,9 +1,9 @@
 ---
 name: toprouter-web-fetch
-description: Fetch URL → markdown / text / HTML via 9Router /v1/web/fetch using Firecrawl / Jina Reader / Tavily Extract / Exa Contents. Use when the user wants to scrape a webpage, extract URL content, read article, or convert a URL to markdown.
+description: Fetch URL → markdown / text / HTML via TopRouter /v1/web/fetch using Firecrawl / Jina Reader / Tavily Extract / Exa Contents. Use when the user wants to scrape a webpage, extract URL content, read article, or convert a URL to markdown.
 ---
 
-# 9Router — Web Fetch
+# TopRouter — Web Fetch
 
 Requires `NINEROUTER_URL` (and `NINEROUTER_KEY` if auth enabled). See https://raw.githubusercontent.com/decolua/toprouter/refs/heads/master/skills/toprouter/SKILL.md for setup.
 
